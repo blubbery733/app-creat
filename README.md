@@ -8,7 +8,6 @@ Windows companion application for the PSR3 ESP32 console project.
 - ESP32 address: `192.168.4.1`
 - Mock Mode for testing without the console
 - Remote Play placeholder
-- Gamepad Plus placeholder
 - Diagnostics placeholders for free heap and largest block
 - HTTP/WebSocket protocol planned
 - Recovery remains on the TV through AV
