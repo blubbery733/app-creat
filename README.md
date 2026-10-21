@@ -2,14 +2,16 @@
 
 Windows companion application for the PSR3 ESP32 console project.
 
-## Current v0.1
+## Current app
 
-- Dashboard
-- ESP32 address: `192.168.4.1`
-- Mock Mode for testing without the console
-- Remote Play placeholder
-- Diagnostics placeholders for free heap and largest block
-- HTTP/WebSocket protocol planned
+- PlayStation-app-inspired dark/blue interface
+- Start screen with **ESP32** and **Remote Play**
+- Working **Dashboard** and **Settings** navigation
+- Default Wi-Fi: `PSR3`
+- Default ESP32 IP: `192.168.4.1`
+- Real connection probe: `http://192.168.4.1/api/status`
+- Remote Play pairing UI with an exact 4-digit code
+- Demo mode for UI testing
 - Recovery remains on the TV through AV
 
 ## Build
@@ -22,4 +24,4 @@ GitHub Actions builds the Windows release automatically on every push to `main`.
 4. Download the **PSR3-Windows** artifact
 5. Extract the whole archive and run the EXE from that folder
 
-Do not move the EXE away from the DLL files and the `data` folder.
+Keep the EXE together with its DLL files and the `data` folder.
