@@ -184,13 +184,6 @@ class _HomePageState extends State<HomePage> {
                                   });
                                 },
                               ),
-                              const SizedBox(height: 8),
-                              const ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: Icon(Icons.sports_esports),
-                                title: Text('Gamepad Plus'),
-                                subtitle: Text('Controller integration placeholder'),
-                              ),
                             ],
                           ),
                         ),
