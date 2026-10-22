@@ -93,7 +93,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 1900), () {
+    Future<void>.delayed(const Duration(milliseconds: 2600), () {
       if (mounted) setState(() => showSplash = false);
     });
   }
@@ -143,7 +143,7 @@ class _HomePageState extends State<HomePage> {
       body: Center(
         child: Image.asset(
           'assets/startup-controller.webp',
-          width: 360,
+          width: 440,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
         ),
@@ -509,18 +509,6 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-              Positioned(
-                top: 18,
-                right: 18,
-                child: IconButton(
-                  tooltip: 'Выйти из Remote Play (Esc)',
-                  onPressed: exitRemotePlay,
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    color: Color(0xFFA8B6AC),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -737,7 +725,7 @@ class _HomePageState extends State<HomePage> {
 
   void startStatusPolling() {
     statusTimer?.cancel();
-    statusTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    statusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted && connected && mode == ConnectMode.esp32) {
         refreshInfo(silent: true);
       }
@@ -1120,9 +1108,7 @@ class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
   void initState() {
     super.initState();
     timer = Timer.periodic(const Duration(milliseconds: 380), (_) {
-      if (mounted) {
-        setState(() => activeDot = (activeDot + 1) % 3);
-      }
+      if (mounted) setState(() => activeDot = (activeDot + 1) % 3);
     });
   }
 
@@ -1137,17 +1123,17 @@ class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
       duration: const Duration(milliseconds: 220),
       width: index == activeDot ? 14 : 11,
       height: index == activeDot ? 14 : 11,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
         color: index == activeDot
             ? Colors.white
-            : const Color(0xFF777A80),
+            : const Color(0xFF6E7175),
         shape: BoxShape.circle,
         boxShadow: index == activeDot
             ? const [
                 BoxShadow(
-                  color: Color(0x88FFFFFF),
-                  blurRadius: 13,
+                  color: Color(0x77FFFFFF),
+                  blurRadius: 12,
                   spreadRadius: 1,
                 ),
               ]
@@ -1177,32 +1163,15 @@ class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
                   child: Column(
                     children: [
                       const Spacer(flex: 2),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 28,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF090A0B),
-                          borderRadius: BorderRadius.circular(9),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x441A1A1A),
-                              blurRadius: 28,
-                              spreadRadius: 7,
-                            ),
-                          ],
-                        ),
-                        child: const Text(
-                          'Поиск PSR3',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 31,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      const Text(
+                        'Поиск PSR3',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 31,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       const Text(
                         'Это может занять несколько минут.',
                         style: TextStyle(
@@ -1217,50 +1186,19 @@ class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
                           const Icon(
                             Icons.desktop_windows_rounded,
                             color: Colors.white,
-                            size: 48,
+                            size: 52,
                           ),
-                          const SizedBox(width: 22),
-                          const Icon(
-                            Icons.phone_android_rounded,
-                            color: Colors.white,
-                            size: 46,
-                          ),
-                          const SizedBox(width: 34),
+                          const SizedBox(width: 42),
                           connectionDot(0),
                           connectionDot(1),
                           connectionDot(2),
-                          const SizedBox(width: 34),
+                          const SizedBox(width: 42),
                           const Icon(
                             Icons.sports_esports_rounded,
                             color: Colors.white,
-                            size: 62,
+                            size: 64,
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 42),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 380),
-                        width: activeDot == 1 ? 530 : 490,
-                        height: activeDot == 1 ? 92 : 78,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(60),
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0x002F3034),
-                              Color(0x553C3E43),
-                              Color(0x99606268),
-                              Color(0x553C3E43),
-                              Color(0x002F3034),
-                            ],
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x6656585D),
-                              blurRadius: 34,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
                       ),
                       const Spacer(flex: 2),
                       TextButton(
