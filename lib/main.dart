@@ -1,9 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 void main() => runApp(const Psr3App());
+
+const bg = Color(0xFF070A08);
+const surface = Color(0xFF101612);
+const surface2 = Color(0xFF151E18);
+const border = Color(0xFF28372D);
+const green = Color(0xFF246B45);
+const greenSoft = Color(0xFF78D39D);
+const muted = Color(0xFFA8B6AC);
 
 class Psr3App extends StatelessWidget {
   const Psr3App({super.key});
@@ -16,26 +25,25 @@ class Psr3App extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFF070B12),
+        scaffoldBackgroundColor: bg,
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF168BFF),
-          secondary: Color(0xFF67B8FF),
-          surface: Color(0xFF101824),
+          primary: greenSoft,
+          secondary: green,
+          surface: surface,
         ),
-        cardTheme: const CardThemeData(
-          color: Color(0xFF101824),
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(24)),
-            side: BorderSide(color: Color(0xFF22324B)),
-          ),
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
+        inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Color(0xFF0B121D),
+          fillColor: surface2,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: greenSoft),
+          ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),
@@ -44,8 +52,8 @@ class Psr3App extends StatelessWidget {
   }
 }
 
-enum ConnectMode { none, esp32, remotePlay }
-enum AppPage { dashboard, settings }
+enum ConnectMode { esp32, remotePlay }
+enum MainPage { system, settings }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -55,129 +63,131 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const blue = Color(0xFF168BFF);
-  static const blueSoft = Color(0xFF67B8FF);
-  static const border = Color(0xFF22324B);
-  static const muted = Color(0xFF9CB0C9);
-  static const green = Color(0xFF4BE29A);
-  static const orange = Color(0xFFFFB45A);
-
-  ConnectMode mode = ConnectMode.none;
-  AppPage page = AppPage.dashboard;
-
-  bool busy = false;
+  bool showSplash = true;
+  bool chooseMode = true;
+  bool streamMode = false;
   bool connected = false;
   bool demoMode = false;
 
-  String wifiName = 'PSR3';
-  String ipAddress = '192.168.4.1';
-  String remoteNetwork = '';
-  String remoteCode = '';
+  ConnectMode? mode;
+  MainPage page = MainPage.system;
 
-  String headline = 'Choose a connection';
-  String details = 'Connect directly to ESP32 or use the Remote Play pairing flow.';
-
+  String ip = '192.168.4.1';
+  String ping = '—';
+  String firmware = '—';
   String freeHeap = '—';
   String largestBlock = '—';
   String wifiRssi = '—';
-  String firmware = '—';
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 1900), () {
+      if (mounted) setState(() => showSplash = false);
+    });
+  }
+
+  String get baseUrl => 'http://' + ip;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: mode == ConnectMode.none ? startScreen() : appShell(),
+    if (showSplash) return splash();
+    if (streamMode) return stream();
+    if (chooseMode) return chooser();
+    return shell();
+  }
+
+  Widget splash() {
+    return const Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'PSR3',
+              style: TextStyle(
+                fontSize: 64,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 10,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'PLAYSTATION REPLAY',
+              style: TextStyle(
+                color: Color(0xFF8E9791),
+                fontSize: 13,
+                letterSpacing: 4,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget startScreen() {
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0x22168BFF),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: border),
-                  ),
-                  child: const Text(
-                    'PSR3 for Windows',
+  Widget chooser() {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1020),
+            child: Padding(
+              padding: const EdgeInsets.all(30),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Подключите консоль',
                     style: TextStyle(
-                      color: blueSoft,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 42,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1,
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Connect your console',
-                  style: TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.8,
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Выберите способ подключения к PSR3.',
+                    style: TextStyle(color: muted, fontSize: 16),
                   ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Choose how the PC app should communicate with PSR3.',
-                  style: TextStyle(color: muted, fontSize: 16),
-                ),
-                const SizedBox(height: 28),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final first = ConnectionCard(
-                      icon: Icons.memory_rounded,
-                      title: 'ESP32',
-                      subtitle: 'Direct local connection to your PSR3 controller.',
-                      bullets: const [
-                        'Connect Windows to Wi-Fi “PSR3”',
-                        'Default IP: 192.168.4.1',
-                        'Status: /api/status',
-                      ],
-                      buttonText: 'Connect to ESP32',
-                      onPressed: showEsp32Dialog,
-                    );
+                  const SizedBox(height: 28),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final esp = ModeCard(
+                        icon: Icons.memory_rounded,
+                        title: 'ESP32',
+                        subtitle: 'Состояние консоли, прошивка, ping и системная информация.',
+                        onTap: () => begin(ConnectMode.esp32),
+                      );
+                      final remote = ModeCard(
+                        icon: Icons.sports_esports_rounded,
+                        title: 'Remote Play',
+                        subtitle: 'Подключение по коду с телевизора и будущая трансляция PSR3.',
+                        onTap: () => begin(ConnectMode.remotePlay),
+                      );
 
-                    final second = ConnectionCard(
-                      icon: Icons.sports_esports_rounded,
-                      title: 'Remote Play',
-                      subtitle: 'Pair through a network and a code shown by PSR3.',
-                      bullets: const [
-                        'Choose the network manually',
-                        'Enter exactly 4 digits',
-                        'Continue into the PSR3 control center',
-                      ],
-                      buttonText: 'Use Remote Play',
-                      onPressed: showRemoteDialog,
-                    );
-
-                    if (constraints.maxWidth < 760) {
-                      return Column(
+                      if (constraints.maxWidth < 720) {
+                        return Column(
+                          children: [
+                            esp,
+                            const SizedBox(height: 16),
+                            remote,
+                          ],
+                        );
+                      }
+                      return Row(
                         children: [
-                          first,
-                          const SizedBox(height: 18),
-                          second,
+                          Expanded(child: esp),
+                          const SizedBox(width: 16),
+                          Expanded(child: remote),
                         ],
                       );
-                    }
-
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: first),
-                        const SizedBox(width: 18),
-                        Expanded(child: second),
-                      ],
-                    );
-                  },
-                ),
-              ],
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -185,817 +195,769 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget appShell() {
-    return SafeArea(
-      child: Row(
-        children: [
-          Container(
-            width: 250,
-            margin: const EdgeInsets.all(18),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: const Color(0xFF101824),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(color: border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'PSR3',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  mode == ConnectMode.esp32 ? 'ESP32 session' : 'Remote Play session',
-                  style: const TextStyle(color: muted),
-                ),
-                const SizedBox(height: 24),
-                NavButton(
-                  icon: Icons.dashboard_rounded,
-                  label: 'Dashboard',
-                  selected: page == AppPage.dashboard,
-                  onPressed: () => setState(() => page = AppPage.dashboard),
-                ),
-                const SizedBox(height: 10),
-                NavButton(
-                  icon: Icons.settings_rounded,
-                  label: 'Settings',
-                  selected: page == AppPage.settings,
-                  onPressed: () => setState(() => page = AppPage.settings),
-                ),
-                const Spacer(),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0B121D),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            connected ? Icons.circle : Icons.circle_outlined,
-                            size: 12,
-                            color: connected ? green : orange,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(connected ? 'Connected' : 'Not connected'),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        mode == ConnectMode.esp32
-                            ? 'Wi-Fi: ' + wifiName + '\nIP: ' + ipAddress
-                            : 'Network: ' + displayNetwork + '\nCode: ' + displayCode,
-                        style: const TextStyle(color: muted, height: 1.45),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: busy ? null : returnToStart,
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Back to start'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
-              child: Column(
-                children: [
-                  StatusHeader(
-                    headline: headline,
-                    details: details,
-                    busy: busy,
-                    connected: connected,
-                    mode: mode == ConnectMode.esp32 ? 'ESP32' : 'Remote Play',
-                  ),
-                  const SizedBox(height: 18),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: page == AppPage.dashboard
-                          ? dashboard()
-                          : settings(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<void> begin(ConnectMode selected) async {
+    mode = selected;
 
-  String get displayNetwork => remoteNetwork.isEmpty ? '—' : remoteNetwork;
-  String get displayCode => remoteCode.isEmpty ? '—' : remoteCode;
-
-  Widget dashboard() {
-    return Wrap(
-      spacing: 18,
-      runSpacing: 18,
-      children: [
-        Panel(
-          title: 'Connection',
-          width: 400,
-          child: Column(
-            children: [
-              InfoRow(
-                label: 'Mode',
-                value: mode == ConnectMode.esp32 ? 'ESP32' : 'Remote Play',
-              ),
-              InfoRow(
-                label: 'Status',
-                value: connected ? 'Connected' : 'Disconnected',
-              ),
-              InfoRow(
-                label: 'Target',
-                value: mode == ConnectMode.esp32
-                    ? 'http://' + ipAddress + '/api/status'
-                    : displayNetwork,
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: busy ? null : reconnect,
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('Reconnect'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: busy ? null : refreshDiagnostics,
-                      icon: const Icon(Icons.analytics_rounded),
-                      label: const Text('Refresh'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Panel(
-          title: 'Diagnostics',
-          width: 400,
-          child: Column(
-            children: [
-              InfoRow(label: 'Free heap', value: freeHeap),
-              InfoRow(label: 'Largest block', value: largestBlock),
-              InfoRow(label: 'Wi-Fi RSSI', value: wifiRssi),
-              InfoRow(label: 'Firmware', value: firmware),
-            ],
-          ),
-        ),
-        Panel(
-          title: 'Quick actions',
-          width: 400,
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              ActionChip(
-                avatar: const Icon(Icons.power_settings_new_rounded, size: 18),
-                label: const Text('Power'),
-                onPressed: () => note('Power API command is the next firmware step.'),
-              ),
-              ActionChip(
-                avatar: const Icon(Icons.restart_alt_rounded, size: 18),
-                label: const Text('Restart'),
-                onPressed: () => note('Restart API command is the next firmware step.'),
-              ),
-              ActionChip(
-                avatar: const Icon(Icons.system_update_alt_rounded, size: 18),
-                label: const Text('Update Mode'),
-                onPressed: () => note('Update Mode is reserved for firmware updates.'),
-              ),
-              ActionChip(
-                avatar: const Icon(Icons.tv_rounded, size: 18),
-                label: const Text('Recovery over AV'),
-                onPressed: () => note('Recovery stays on the console and appears on the TV over AV.'),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget settings() {
-    return Wrap(
-      spacing: 18,
-      runSpacing: 18,
-      children: [
-        Panel(
-          title: 'Connection settings',
-          width: 500,
-          child: Column(
-            children: [
-              if (mode == ConnectMode.esp32) ...[
-                TextFormField(
-                  initialValue: wifiName,
-                  decoration: const InputDecoration(labelText: 'Wi-Fi network'),
-                  onChanged: (value) => wifiName = value,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  initialValue: ipAddress,
-                  decoration: const InputDecoration(labelText: 'ESP32 IP address'),
-                  onChanged: (value) => ipAddress = value,
-                ),
-              ] else ...[
-                TextFormField(
-                  initialValue: remoteNetwork,
-                  decoration: const InputDecoration(labelText: 'Remote Play network'),
-                  onChanged: (value) => remoteNetwork = value,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  initialValue: remoteCode,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  decoration: const InputDecoration(
-                    labelText: '4-digit confirmation code',
-                    counterText: '',
-                  ),
-                  onChanged: (value) => remoteCode = value,
-                ),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: busy ? null : reconnect,
-                  icon: const Icon(Icons.link_rounded),
-                  label: const Text('Apply and reconnect'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Panel(
-          title: 'Testing',
-          width: 360,
-          child: SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: demoMode,
-            title: const Text('Demo mode'),
-            subtitle: const Text(
-              'Preview the connected UI when the real console is unavailable.',
-            ),
-            onChanged: (value) => setState(() => demoMode = value),
-          ),
-        ),
-        Panel(
-          title: 'Defaults',
-          width: 360,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Wi-Fi: PSR3'),
-              const SizedBox(height: 8),
-              const Text('IP: 192.168.4.1'),
-              const SizedBox(height: 8),
-              const Text('Endpoint: /api/status'),
-              const SizedBox(height: 8),
-              const Text('Remote Play code: exactly 4 digits'),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: restoreDefaults,
-                icon: const Icon(Icons.restore_rounded),
-                label: const Text('Restore defaults'),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> showEsp32Dialog() async {
-    final wifi = TextEditingController(text: wifiName);
-    final ip = TextEditingController(text: ipAddress);
-
-    await showDialog<void>(
+    final ok = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Connect to ESP32'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'First connect Windows to Wi-Fi “PSR3”, then confirm the local IP.',
-                style: TextStyle(color: muted),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: wifi,
-                decoration: const InputDecoration(labelText: 'Wi-Fi network'),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: ip,
-                decoration: const InputDecoration(labelText: 'ESP32 IP address'),
-              ),
-            ],
+        backgroundColor: surface,
+        title: const Text('Подключитесь к сети PSR3'),
+        content: const SizedBox(
+          width: 430,
+          child: Text(
+            'Подключите компьютер к Wi-Fi сети PSR3. После подключения вернитесь в приложение.',
+            style: TextStyle(color: muted, height: 1.45),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Назад'),
           ),
           FilledButton(
-            onPressed: () {
-              final newWifi = wifi.text.trim().isEmpty ? 'PSR3' : wifi.text.trim();
-              final newIp = ip.text.trim().isEmpty ? '192.168.4.1' : ip.text.trim();
-              Navigator.pop(dialogContext);
-              connectEsp32(newWifi, newIp);
-            },
-            child: const Text('Connect'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Я подключился'),
           ),
         ],
       ),
     );
 
-    wifi.dispose();
-    ip.dispose();
+    if (ok != true || !mounted) return;
+    if (selected == ConnectMode.remotePlay) {
+      await remoteFlow();
+    } else {
+      await espFlow();
+    }
   }
 
-  Future<void> showRemoteDialog() async {
-    final network = TextEditingController(text: remoteNetwork);
-    final code = TextEditingController(text: remoteCode);
+  Future<void> remoteFlow() async {
+    await loadingDialog(
+      const Duration(seconds: 5),
+      'Поиск PSR3',
+      'Проверяем подключение к консоли',
+    );
+    if (!mounted) return;
+
+    final code = await askCode();
+    if (code == null || !mounted) return;
+
+    final paired = demoMode ? true : await pairRemote(code);
+    if (!mounted) return;
+
+    if (!paired) {
+      note('Код не подтверждён. Проверьте код на телевизоре и соединение с PSR3.');
+      return;
+    }
+
+    await loadingDialog(
+      const Duration(milliseconds: 1800),
+      'Подключение',
+      'Запускаем Remote Play',
+    );
+    if (!mounted) return;
+
+    setState(() {
+      streamMode = true;
+      chooseMode = false;
+      connected = true;
+    });
+  }
+
+  Future<void> espFlow() async {
+    await loadingDialog(
+      const Duration(milliseconds: 1300),
+      'Подключение к ESP32',
+      'Проверяем ' + baseUrl,
+    );
+    if (!mounted) return;
+
+    final result = demoMode
+        ? const ApiResult(true, 'Demo', <String, dynamic>{})
+        : await getJson('/api/status');
+
+    if (!mounted) return;
+    if (!result.ok) {
+      note(result.message);
+      return;
+    }
+
+    setState(() {
+      chooseMode = false;
+      connected = true;
+    });
+
+    await refreshInfo();
+  }
+
+  Future<void> loadingDialog(
+    Duration duration,
+    String title,
+    String subtitle,
+  ) async {
+    if (!mounted) return;
+
+    unawaited(showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => LoadingDialog(title: title, subtitle: subtitle),
+    ));
+
+    await Future<void>.delayed(duration);
+    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  Future<String?> askCode() async {
+    final controller = TextEditingController();
     String? error;
 
-    await showDialog<void>(
+    final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Remote Play pairing'),
-            content: SizedBox(
-              width: 420,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: surface,
+          title: const Text('Введите код с телевизора'),
+          content: SizedBox(
+            width: 420,
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              decoration: InputDecoration(
+                labelText: '4-значный код',
+                counterText: '',
+                errorText: error,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (!RegExp(r'^\d{4}$').hasMatch(value)) {
+                  setDialogState(() => error = 'Введите ровно 4 цифры');
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: const Text('Подключиться'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+  Widget stream() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: ColoredBox(color: Colors.black)),
+          Positioned(
+            top: 18,
+            right: 18,
+            child: IconButton(
+              tooltip: 'Выйти из Remote Play',
+              onPressed: () => setState(() {
+                streamMode = false;
+                chooseMode = true;
+                connected = false;
+              }),
+              icon: const Icon(
+                Icons.close_rounded,
+                color: Color(0xFF4A504C),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget shell() {
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
+          children: [
+            Container(
+              width: 230,
+              margin: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: border),
+              ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Choose the network manually and enter the 4-digit code shown on PSR3.',
-                    style: TextStyle(color: muted),
+                    'PSR3',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   ),
+                  const SizedBox(height: 4),
+                  const Text('ESP32', style: TextStyle(color: greenSoft)),
+                  const SizedBox(height: 24),
+                  NavItem(
+                    icon: Icons.memory_rounded,
+                    label: 'Система',
+                    selected: page == MainPage.system,
+                    onTap: () => setState(() => page = MainPage.system),
+                  ),
+                  const SizedBox(height: 8),
+                  NavItem(
+                    icon: Icons.settings_rounded,
+                    label: 'Настройки',
+                    selected: page == MainPage.settings,
+                    onTap: () => setState(() => page = MainPage.settings),
+                  ),
+                  const Spacer(),
+                  Text(
+                    connected ? 'Подключено' : 'Нет связи',
+                    style: TextStyle(
+                      color: connected ? greenSoft : muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(ip, style: const TextStyle(color: muted)),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: network,
-                    decoration: const InputDecoration(labelText: 'Network name'),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: code,
-                    keyboardType: TextInputType.number,
-                    maxLength: 4,
-                    decoration: InputDecoration(
-                      labelText: '4-digit confirmation code',
-                      counterText: '',
-                      errorText: error,
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: backToStart,
+                      child: const Text('Отключиться'),
                     ),
                   ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
+                child: page == MainPage.system
+                    ? systemPage()
+                    : settingsPage(),
               ),
-              FilledButton(
-                onPressed: () {
-                  final value = code.text.trim();
-                  if (!RegExp(r'^\d{4}$').hasMatch(value)) {
-                    setDialogState(() => error = 'Enter exactly 4 digits');
-                    return;
-                  }
-                  final selectedNetwork = network.text.trim();
-                  Navigator.pop(dialogContext);
-                  connectRemote(selectedNetwork, value);
-                },
-                child: const Text('Pair'),
-              ),
-            ],
-          ),
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
-
-    network.dispose();
-    code.dispose();
   }
 
-  Future<void> connectEsp32(String wifi, String ip) async {
-    setState(() {
-      mode = ConnectMode.esp32;
-      page = AppPage.dashboard;
-      wifiName = wifi;
-      ipAddress = ip;
-      busy = true;
-      connected = false;
-      headline = 'Connecting to ESP32';
-      details = 'GET http://' + ip + '/api/status over Wi-Fi “' + wifi + '”…';
-    });
+  Widget systemPage() {
+    return SingleChildScrollView(
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          Panel(
+            title: 'Подключение',
+            width: 410,
+            child: Column(
+              children: [
+                InfoRow(label: 'Статус', value: connected ? 'Подключено' : 'Нет связи'),
+                InfoRow(label: 'IP', value: ip),
+                InfoRow(label: 'Ping', value: ping),
+                InfoRow(label: 'Прошивка', value: firmware),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: refreshInfo,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Обновить'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Panel(
+            title: 'Система',
+            width: 410,
+            child: Column(
+              children: [
+                InfoRow(label: 'Свободная память', value: freeHeap),
+                InfoRow(label: 'Крупнейший блок', value: largestBlock),
+                InfoRow(label: 'Wi-Fi RSSI', value: wifiRssi),
+              ],
+            ),
+          ),
+          Panel(
+            title: 'Действия',
+            width: 410,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                ActionChip(
+                  avatar: const Icon(Icons.restart_alt_rounded, size: 18),
+                  label: const Text('Перезагрузка'),
+                  onPressed: () => postCommand('/api/restart'),
+                ),
+                ActionChip(
+                  avatar: const Icon(Icons.system_update_alt_rounded, size: 18),
+                  label: const Text('Update Mode'),
+                  onPressed: () => postCommand('/api/update-mode'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    final result = await probeStatus(ip);
-    if (!mounted) return;
+  Widget settingsPage() {
+    return SingleChildScrollView(
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          Panel(
+            title: 'Соединение',
+            width: 500,
+            child: Column(
+              children: [
+                TextFormField(
+                  initialValue: ip,
+                  decoration: const InputDecoration(
+                    labelText: 'IP ESP32',
+                    helperText: 'Указывайте только IP. /api/... приложение добавит само.',
+                  ),
+                  onFieldSubmitted: saveIp,
+                ),
+                const SizedBox(height: 12),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'По умолчанию: 192.168.4.1',
+                    style: TextStyle(color: muted),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Panel(
+            title: 'Тестирование',
+            width: 360,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: demoMode,
+              title: const Text('Демо-режим'),
+              subtitle: const Text(
+                'Проверка интерфейса без реальной консоли.',
+                style: TextStyle(color: muted),
+              ),
+              onChanged: (value) => setState(() => demoMode = value),
+            ),
+          ),
+          const Panel(
+            title: 'Remote Play',
+            width: 360,
+            child: Text(
+              'Экран трансляции пока полностью чёрный. Он зарезервирован под будущий рендер или поток после переноса проекта SB3.',
+              style: TextStyle(color: muted, height: 1.45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    setState(() {
-      busy = false;
-      connected = result.ok || demoMode;
-      headline = result.ok
-          ? 'ESP32 connected'
-          : demoMode
-              ? 'Demo mode active'
-              : 'ESP32 connection failed';
-      details = result.message;
+  void saveIp(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    setState(() => ip = clean);
+    note('IP сохранён');
+  }
 
-      if (demoMode && !result.ok) {
+  Future<void> refreshInfo() async {
+    if (demoMode) {
+      setState(() {
+        connected = true;
+        ping = '4 ms';
+        firmware = 'Demo';
         freeHeap = 'Demo';
         largestBlock = 'Demo';
         wifiRssi = '-48 dBm';
-        firmware = 'Demo';
-      }
-    });
+      });
+      return;
+    }
 
-    if (!result.ok && !demoMode) note(result.message);
+    final watch = Stopwatch()..start();
+    final result = await getJson('/api/status');
+    watch.stop();
+
+    if (!mounted) return;
+    if (!result.ok) {
+      setState(() {
+        connected = false;
+        ping = '—';
+      });
+      note(result.message);
+      return;
+    }
+
+    final data = result.data;
+    setState(() {
+      connected = true;
+      ping = watch.elapsedMilliseconds.toString() + ' ms';
+      firmware = field(data, 'firmware');
+      freeHeap = field(data, 'free_heap');
+      largestBlock = field(data, 'largest_block');
+      wifiRssi = field(data, 'wifi_rssi');
+    });
   }
 
-  Future<ProbeResult> probeStatus(String ip) async {
-    final uri = Uri.parse('http://' + ip + '/api/status');
+  String field(Map<String, dynamic> data, String name) {
+    final value = data[name];
+    return value == null ? '—' : value.toString();
+  }
+
+  Future<bool> pairRemote(String code) async {
+    final result = await postJson(
+      '/api/remote/pair',
+      <String, dynamic>{'code': code},
+    );
+    return result.ok;
+  }
+
+  Future<void> postCommand(String path) async {
+    final result = demoMode
+        ? const ApiResult(true, 'Demo', <String, dynamic>{})
+        : await postJson(path, const <String, dynamic>{});
+    if (!mounted) return;
+    note(result.ok ? 'Команда отправлена' : result.message);
+  }
+
+  Future<ApiResult> getJson(String path) async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 4);
 
     try {
+      final uri = Uri.parse(baseUrl + path);
       final request = await client.getUrl(uri);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final response = await request.close().timeout(const Duration(seconds: 5));
-      await response.drain<List<int>>();
+      final body = await utf8.decoder.bind(response).join();
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return ProbeResult(
-          true,
-          'PSR3 answered at ' + uri.toString() + ' with HTTP ' + response.statusCode.toString() + '.',
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return ApiResult(
+          false,
+          'PSR3 ответил HTTP ' + response.statusCode.toString(),
+          const <String, dynamic>{},
         );
       }
 
-      return ProbeResult(
-        false,
-        'PSR3 answered, but /api/status returned HTTP ' + response.statusCode.toString() + '.',
+      if (body.trim().isEmpty) {
+        return const ApiResult(true, 'OK', <String, dynamic>{});
+      }
+
+      final decoded = jsonDecode(body);
+      return ApiResult(
+        true,
+        'OK',
+        decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{},
       );
     } on TimeoutException {
-      return const ProbeResult(
+      return const ApiResult(
         false,
-        'Connection timed out. Check Wi-Fi “PSR3”, IP 192.168.4.1 and /api/status.',
+        'Время ожидания ESP32 истекло',
+        <String, dynamic>{},
       );
     } on SocketException catch (e) {
-      return ProbeResult(
+      return ApiResult(
         false,
-        'Could not reach ' + uri.toString() + ': ' + e.message,
+        'Нет связи с ESP32: ' + e.message,
+        const <String, dynamic>{},
       );
     } catch (e) {
-      return ProbeResult(false, 'Connection error: ' + e.toString());
+      return ApiResult(
+        false,
+        'Ошибка подключения: ' + e.toString(),
+        const <String, dynamic>{},
+      );
     } finally {
       client.close(force: true);
     }
   }
 
-  Future<void> connectRemote(String network, String code) async {
-    setState(() {
-      mode = ConnectMode.remotePlay;
-      page = AppPage.dashboard;
-      remoteNetwork = network;
-      remoteCode = code;
-      busy = true;
-      connected = false;
-      headline = 'Pairing Remote Play';
-      details = 'Checking network name and 4-digit confirmation code…';
-    });
+  Future<ApiResult> postJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 4);
 
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
+    try {
+      final uri = Uri.parse(baseUrl + path);
+      final request = await client.postUrl(uri);
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode(body));
+      final response = await request.close().timeout(const Duration(seconds: 5));
+      final text = await utf8.decoder.bind(response).join();
 
-    final validNetwork = network.isNotEmpty;
-    final validCode = RegExp(r'^\d{4}$').hasMatch(code);
-
-    setState(() {
-      busy = false;
-      connected = (validNetwork && validCode) || demoMode;
-      headline = connected ? 'Remote Play ready' : 'Pairing failed';
-
-      if (!validNetwork) {
-        details = 'Choose a network first.';
-      } else if (!validCode) {
-        details = 'The confirmation code must contain exactly 4 digits.';
-      } else {
-        details = 'Pairing data accepted. The real Remote Play transport can be added next.';
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return ApiResult(
+          false,
+          'PSR3 ответил HTTP ' + response.statusCode.toString(),
+          const <String, dynamic>{},
+        );
       }
 
-      freeHeap = 'N/A';
-      largestBlock = 'N/A';
-      wifiRssi = 'N/A';
-      firmware = 'N/A';
-    });
-  }
+      if (text.trim().isEmpty) {
+        return const ApiResult(true, 'OK', <String, dynamic>{});
+      }
 
-  Future<void> reconnect() async {
-    if (mode == ConnectMode.esp32) {
-      await connectEsp32(wifiName, ipAddress);
-    } else if (mode == ConnectMode.remotePlay) {
-      await connectRemote(remoteNetwork, remoteCode);
+      final decoded = jsonDecode(text);
+      return ApiResult(
+        true,
+        'OK',
+        decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{},
+      );
+    } on TimeoutException {
+      return const ApiResult(
+        false,
+        'Время ожидания ESP32 истекло',
+        <String, dynamic>{},
+      );
+    } on SocketException catch (e) {
+      return ApiResult(
+        false,
+        'Нет связи с ESP32: ' + e.message,
+        const <String, dynamic>{},
+      );
+    } catch (e) {
+      return ApiResult(
+        false,
+        'Ошибка подключения: ' + e.toString(),
+        const <String, dynamic>{},
+      );
+    } finally {
+      client.close(force: true);
     }
   }
 
-  Future<void> refreshDiagnostics() async {
-    if (!connected) {
-      note('Connect to PSR3 first.');
-      return;
-    }
-
-    if (mode == ConnectMode.esp32) {
-      setState(() {
-        headline = 'Refreshing diagnostics';
-        details = 'Checking /api/status…';
-      });
-
-      final result = await probeStatus(ipAddress);
-      if (!mounted) return;
-
-      setState(() {
-        headline = result.ok ? 'Diagnostics refreshed' : 'Refresh failed';
-        details = result.message;
-        freeHeap = demoMode ? 'Demo' : (result.ok ? 'API online' : '—');
-        largestBlock = demoMode ? 'Demo' : (result.ok ? 'Awaiting JSON fields' : '—');
-        wifiRssi = demoMode ? '-48 dBm' : (result.ok ? 'Awaiting JSON fields' : '—');
-        firmware = demoMode ? 'Demo' : (result.ok ? 'Awaiting JSON fields' : '—');
-      });
-    } else {
-      note('Remote Play diagnostics are not defined yet.');
-    }
-  }
-
-  void restoreDefaults() {
+  void backToStart() {
     setState(() {
-      wifiName = 'PSR3';
-      ipAddress = '192.168.4.1';
-      remoteNetwork = '';
-      remoteCode = '';
-    });
-    note('Defaults restored.');
-  }
-
-  void returnToStart() {
-    setState(() {
-      mode = ConnectMode.none;
+      chooseMode = true;
+      streamMode = false;
       connected = false;
-      busy = false;
-      headline = 'Choose a connection';
-      details = 'Connect directly to ESP32 or use the Remote Play pairing flow.';
+      mode = null;
+      page = MainPage.system;
     });
   }
 
   void note(String message) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
   }
 }
 
-class ProbeResult {
+class ApiResult {
   final bool ok;
   final String message;
+  final Map<String, dynamic> data;
 
-  const ProbeResult(this.ok, this.message);
+  const ApiResult(this.ok, this.message, this.data);
 }
 
-class ConnectionCard extends StatelessWidget {
-  final IconData icon;
+class LoadingDialog extends StatefulWidget {
   final String title;
   final String subtitle;
-  final List<String> bullets;
-  final String buttonText;
-  final VoidCallback onPressed;
 
-  const ConnectionCard({
+  const LoadingDialog({
     super.key,
-    required this.icon,
     required this.title,
     required this.subtitle,
-    required this.bullets,
-    required this.buttonText,
-    required this.onPressed,
   });
 
   @override
+  State<LoadingDialog> createState() => _LoadingDialogState();
+}
+
+class _LoadingDialogState extends State<LoadingDialog> {
+  int dots = 1;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(milliseconds: 420), (_) {
+      if (mounted) setState(() => dots = dots == 3 ? 1 : dots + 1);
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: const Color(0x22168BFF),
-                borderRadius: BorderRadius.circular(18),
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: surface,
+        child: SizedBox(
+          width: 430,
+          height: 220,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 34,
+                height: 34,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
               ),
-              child: Icon(icon, color: const Color(0xFF67B8FF), size: 30),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              subtitle,
-              style: const TextStyle(color: Color(0xFF9CB0C9), height: 1.45),
-            ),
-            const SizedBox(height: 18),
-            for (final bullet in bullets)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 9),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle_rounded,
-                      size: 17,
-                      color: Color(0xFF67B8FF),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(child: Text(bullet)),
-                  ],
+              const SizedBox(height: 22),
+              Text(
+                widget.title + ('.' * dots),
+                style: const TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onPressed,
-                icon: const Icon(Icons.arrow_forward_rounded),
-                label: Text(buttonText),
-              ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(widget.subtitle, style: const TextStyle(color: muted)),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class NavButton extends StatelessWidget {
+class ModeCard extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const ModeCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  State<ModeCard> createState() => _ModeCardState();
+}
+
+class _ModeCardState extends State<ModeCard> {
+  bool hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => hover = true),
+      onExit: (_) => setState(() => hover = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(26),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 230,
+          padding: const EdgeInsets.all(26),
+          decoration: BoxDecoration(
+            color: hover ? surface2 : surface,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: hover ? green : border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: const Color(0x33246B45),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(widget.icon, color: greenSoft, size: 30),
+              ),
+              const Spacer(),
+              Text(
+                widget.title,
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.subtitle,
+                style: const TextStyle(color: muted, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
 
-  const NavButton({
+  const NavItem({
     super.key,
     required this.icon,
     required this.label,
     required this.selected,
-    required this.onPressed,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: selected ? const Color(0x22168BFF) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected
-                ? const Color(0xFF168BFF)
-                : const Color(0xFF22324B),
-          ),
+          color: selected ? const Color(0x33246B45) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: selected ? const Color(0xFF67B8FF) : Colors.white,
-            ),
-            const SizedBox(width: 12),
+            Icon(icon, color: selected ? greenSoft : muted),
+            const SizedBox(width: 10),
             Text(
               label,
               style: TextStyle(
+                color: selected ? Colors.white : muted,
                 fontWeight: FontWeight.w700,
-                color: selected ? const Color(0xFF67B8FF) : Colors.white,
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class StatusHeader extends StatelessWidget {
-  final String headline;
-  final String details;
-  final bool busy;
-  final bool connected;
-  final String mode;
-
-  const StatusHeader({
-    super.key,
-    required this.headline,
-    required this.details,
-    required this.busy,
-    required this.connected,
-    required this.mode,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0x22168BFF), Color(0x11070B12)],
-        ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFF22324B)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  headline,
-                  style: const TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  details,
-                  style: const TextStyle(
-                    color: Color(0xFF9CB0C9),
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          if (busy)
-            const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.4),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: connected
-                    ? const Color(0x224BE29A)
-                    : const Color(0x22FFB45A),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                connected ? mode + ' connected' : mode + ' standby',
-                style: TextStyle(
-                  color: connected
-                      ? const Color(0xFF4BE29A)
-                      : const Color(0xFFFFB45A),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -1017,23 +979,26 @@ class Panel extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                ),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(height: 16),
-              child,
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            child,
+          ],
         ),
       ),
     );
@@ -1053,23 +1018,14 @@ class InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(color: Color(0xFF9CB0C9)),
-            ),
+            child: Text(label, style: const TextStyle(color: muted)),
           ),
-          const SizedBox(width: 14),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
+          const SizedBox(width: 12),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
     );
