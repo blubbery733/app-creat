@@ -2,27 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as Math;
-import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'startup_sound.dart';
-import 'visual_assets.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await ui.loadFontFromList(
-      base64Decode(kZenMaruFontBase64),
-      fontFamily: 'ZenMaru',
-    );
-  } catch (_) {
-    // Fall back to the system font if loading fails.
-  }
-  runApp(const Psr3App());
-}
+void main() => runApp(const Psr3App());
 
 const bg = Color(0xFF070A08);
 const surface = Color(0xFF101612);
@@ -154,8 +141,8 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Image.memory(
-          base64Decode(kStartupControllerImageBase64),
+        child: Image.asset(
+          'assets/startup-controller.webp',
           width: 360,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
@@ -298,10 +285,8 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final started = await loadingDialog(
+    final started = await remoteLoadingDialog(
       const Duration(milliseconds: 1200),
-      'Подключение',
-      'Запускаем Remote Play',
     );
     if (!started || !mounted) return;
 
@@ -1194,8 +1179,8 @@ class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
                   flex: 5,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 40),
-                    child: Image.memory(
-                      base64Decode(kRemoteLoadingImageBase64),
+                    child: Image.asset(
+                      'assets/remote-loading.webp',
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                     ),
