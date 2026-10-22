@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: psr3-windows-main
+  cancel-in-progress: true
+
 jobs:
   build-windows:
     runs-on: windows-latest
