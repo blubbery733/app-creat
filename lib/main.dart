@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as Math;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+
+import 'startup_sound.dart';
 
 void main() => runApp(const Psr3App());
 
@@ -80,6 +83,8 @@ class _HomePageState extends State<HomePage> {
   String largestBlock = '—';
   String wifiRssi = '—';
   Timer? statusTimer;
+  final AudioPlayer remotePlayer = AudioPlayer();
+  bool remoteSoundPlayed = false;
 
   @override
   void initState() {
@@ -92,6 +97,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     statusTimer?.cancel();
+    unawaited(remotePlayer.dispose());
     super.dispose();
   }
 
@@ -252,6 +258,7 @@ class _HomePageState extends State<HomePage> {
       chooseMode = false;
       connected = true;
     });
+    await playRemoteStartupSound();
   }
 
   Future<void> espFlow() async {
@@ -407,11 +414,15 @@ class _HomePageState extends State<HomePage> {
             right: 18,
             child: IconButton(
               tooltip: 'Выйти из Remote Play',
-              onPressed: () => setState(() {
-                streamMode = false;
-                chooseMode = true;
-                connected = false;
-              }),
+              onPressed: () {
+                unawaited(remotePlayer.stop());
+                setState(() {
+                  streamMode = false;
+                  chooseMode = true;
+                  connected = false;
+                  remoteSoundPlayed = false;
+                });
+              },
               icon: const Icon(Icons.close_rounded, color: Color(0xFFA8B6AC)),
             ),
           ),
@@ -681,6 +692,21 @@ class _HomePageState extends State<HomePage> {
     return result.ok;
   }
 
+  Future<void> playRemoteStartupSound() async {
+    if (remoteSoundPlayed) return;
+    remoteSoundPlayed = true;
+    try {
+      await remotePlayer.play(
+        BytesSource(
+          base64Decode(kStartupSoundBase64),
+          mimeType: 'audio/mpeg',
+        ),
+      );
+    } catch (_) {
+      // Audio is non-critical; Remote Play stays usable if playback fails.
+    }
+  }
+
   Future<void> postCommand(String path) async {
     final result = demoMode
         ? const ApiResult(true, 'Demo', <String, dynamic>{})
@@ -803,6 +829,8 @@ class _HomePageState extends State<HomePage> {
 
   void backToStart() {
     statusTimer?.cancel();
+    unawaited(remotePlayer.stop());
+    remoteSoundPlayed = false;
     setState(() {
       chooseMode = true;
       streamMode = false;
