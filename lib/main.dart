@@ -1,18 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as Math;
 
 import 'package:flutter/material.dart';
 
 void main() => runApp(const Psr3App());
 
-const bg = Color(0xFF111214);
-const surface = Color(0xFF18191C);
-const surface2 = Color(0xFF202226);
-const border = Color(0xFF32353B);
-const green = Color(0xFF0B5BA7);
-const greenSoft = Color(0xFF4AA9F8);
-const muted = Color(0xFFA7A9AE);
+const bg = Color(0xFF070A08);
+const surface = Color(0xFF101612);
+const surface2 = Color(0xFF151E18);
+const border = Color(0xFF28372D);
+const green = Color(0xFF246B45);
+const greenSoft = Color(0xFF78D39D);
+const muted = Color(0xFFA8B6AC);
 
 class Psr3App extends StatelessWidget {
   const Psr3App({super.key});
@@ -78,6 +79,7 @@ class _HomePageState extends State<HomePage> {
   String freeHeap = '—';
   String largestBlock = '—';
   String wifiRssi = '—';
+  Timer? statusTimer;
 
   @override
   void initState() {
@@ -85,6 +87,12 @@ class _HomePageState extends State<HomePage> {
     Future<void>.delayed(const Duration(milliseconds: 1900), () {
       if (mounted) setState(() => showSplash = false);
     });
+  }
+
+  @override
+  void dispose() {
+    statusTimer?.cancel();
+    super.dispose();
   }
 
   String get baseUrl => 'http://' + ip;
@@ -139,15 +147,13 @@ class _HomePageState extends State<HomePage> {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final esp = ModeCard(
-                        icon: Icons.memory_rounded,
-                        title: 'ESP32',
-                        subtitle: 'Состояние консоли, прошивка, ping и системная информация.',
+                        icon: Icons.cable_rounded,
+                        title: 'Прямое подключение',
                         onTap: () => begin(ConnectMode.esp32),
                       );
                       final remote = ModeCard(
                         icon: Icons.sports_esports_rounded,
                         title: 'Remote Play',
-                        subtitle: 'Подключение по коду с телевизора и будущая трансляция PSR3.',
                         onTap: () => begin(ConnectMode.remotePlay),
                       );
 
@@ -272,6 +278,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     await refreshInfo();
+    startStatusPolling();
   }
 
   Future<bool> loadingDialog(
@@ -356,10 +363,45 @@ class _HomePageState extends State<HomePage> {
 
   Widget stream() {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF050806),
       body: Stack(
         children: [
-          const Positioned.fill(child: ColoredBox(color: Colors.black)),
+          const Positioned.fill(
+            child: CustomPaint(painter: RemoteWavesPainter()),
+          ),
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(0, 0.15),
+                  radius: 1.05,
+                  colors: [
+                    Color(0x2228A966),
+                    Color(0x110F5D3B),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.sports_esports_rounded, size: 74, color: greenSoft),
+                SizedBox(height: 16),
+                Text(
+                  'Remote Play',
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Подключение установлено',
+                  style: TextStyle(color: muted, fontSize: 15),
+                ),
+              ],
+            ),
+          ),
           Positioned(
             top: 18,
             right: 18,
@@ -370,10 +412,7 @@ class _HomePageState extends State<HomePage> {
                 chooseMode = true;
                 connected = false;
               }),
-              icon: const Icon(
-                Icons.close_rounded,
-                color: Color(0xFF4A504C),
-              ),
+              icon: const Icon(Icons.close_rounded, color: Color(0xFFA8B6AC)),
             ),
           ),
         ],
@@ -403,7 +442,7 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 4),
-                  const Text('ESP32', style: TextStyle(color: greenSoft)),
+                  const Text('Прямое подключение', style: TextStyle(color: greenSoft)),
                   const SizedBox(height: 24),
                   NavItem(
                     icon: Icons.memory_rounded,
@@ -466,7 +505,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 InfoRow(label: 'Статус', value: connected ? 'Подключено' : 'Нет связи'),
                 InfoRow(label: 'IP', value: ip),
-                InfoRow(label: 'Ping', value: ping),
+                PingInfoRow(ping: ping, rssi: wifiRssi),
                 InfoRow(label: 'Прошивка', value: firmware),
                 const SizedBox(height: 14),
                 SizedBox(
@@ -491,26 +530,7 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-          Panel(
-            title: 'Действия',
-            width: 410,
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                ActionChip(
-                  avatar: const Icon(Icons.restart_alt_rounded, size: 18),
-                  label: const Text('Перезагрузка'),
-                  onPressed: () => postCommand('/api/restart'),
-                ),
-                ActionChip(
-                  avatar: const Icon(Icons.system_update_alt_rounded, size: 18),
-                  label: const Text('Update Mode'),
-                  onPressed: () => postCommand('/api/update-mode'),
-                ),
-              ],
-            ),
-          ),
+
         ],
       ),
     );
@@ -530,7 +550,7 @@ class _HomePageState extends State<HomePage> {
                 TextFormField(
                   initialValue: ip,
                   decoration: const InputDecoration(
-                    labelText: 'IP ESP32',
+                    labelText: 'IP консоли',
                     helperText: 'Указывайте только IP. /api/... приложение добавит само.',
                   ),
                   onFieldSubmitted: saveIp,
@@ -560,12 +580,24 @@ class _HomePageState extends State<HomePage> {
               onChanged: (value) => setState(() => demoMode = value),
             ),
           ),
-          const Panel(
-            title: 'Remote Play',
-            width: 360,
-            child: Text(
-              'Экран трансляции пока полностью чёрный. Он зарезервирован под будущий рендер или поток после переноса проекта SB3.',
-              style: TextStyle(color: muted, height: 1.45),
+          Panel(
+            title: 'Управление консолью',
+            width: 430,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => postCommand('/api/restart'),
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: const Text('Перезагрузка'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => postCommand('/api/update-mode'),
+                  icon: const Icon(Icons.system_update_alt_rounded),
+                  label: const Text('Update'),
+                ),
+              ],
             ),
           ),
         ],
@@ -580,14 +612,23 @@ class _HomePageState extends State<HomePage> {
     note('IP сохранён');
   }
 
-  Future<void> refreshInfo() async {
+  void startStatusPolling() {
+    statusTimer?.cancel();
+    statusTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted && connected && mode == ConnectMode.esp32) {
+        refreshInfo(silent: true);
+      }
+    });
+  }
+
+  Future<void> refreshInfo({bool silent = false}) async {
     if (demoMode) {
       setState(() {
         connected = true;
         ping = '4 ms';
         firmware = 'Demo';
-        freeHeap = 'Demo';
-        largestBlock = 'Demo';
+        freeHeap = '0.3 МБ';
+        largestBlock = '0.2 МБ';
         wifiRssi = '-48 dBm';
       });
       return;
@@ -603,19 +644,28 @@ class _HomePageState extends State<HomePage> {
         connected = false;
         ping = '—';
       });
-      note(result.message);
+      if (!silent) note(result.message);
       return;
     }
 
     final data = result.data;
     setState(() {
       connected = true;
-      ping = watch.elapsedMilliseconds.toString() + ' ms';
+      ping = '${watch.elapsedMilliseconds} ms';
       firmware = field(data, 'firmware');
-      freeHeap = field(data, 'free_heap');
-      largestBlock = field(data, 'largest_block');
+      freeHeap = formatMb(data['free_heap']);
+      largestBlock = formatMb(data['largest_block']);
       wifiRssi = field(data, 'wifi_rssi');
     });
+  }
+
+  String formatMb(dynamic value) {
+    if (value == null) return '—';
+    final raw = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString().replaceAll(RegExp(r'[^0-9.-]'), ''));
+    if (raw == null) return '—';
+    return '${(raw / (1024 * 1024)).toStringAsFixed(2)} МБ';
   }
 
   String field(Map<String, dynamic> data, String name) {
@@ -752,6 +802,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void backToStart() {
+    statusTimer?.cancel();
     setState(() {
       chooseMode = true;
       streamMode = false;
@@ -778,13 +829,11 @@ class ApiResult {
 
 class LoadingDialog extends StatefulWidget {
   final String title;
-  final String subtitle;
   final VoidCallback onCancel;
 
   const LoadingDialog({
     super.key,
     required this.title,
-    required this.subtitle,
     required this.onCancel,
   });
 
@@ -990,7 +1039,7 @@ class _ModeCardState extends State<ModeCard> {
         borderRadius: BorderRadius.circular(26),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          height: 230,
+          height: 175,
           padding: const EdgeInsets.all(26),
           decoration: BoxDecoration(
             color: hover ? surface2 : surface,
@@ -1004,7 +1053,7 @@ class _ModeCardState extends State<ModeCard> {
                 width: 58,
                 height: 58,
                 decoration: BoxDecoration(
-                  color: const Color(0x330B5BA7),
+                  color: const Color(0x33246B45),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Icon(widget.icon, color: greenSoft, size: 30),
@@ -1016,11 +1065,6 @@ class _ModeCardState extends State<ModeCard> {
                   fontSize: 25,
                   fontWeight: FontWeight.w800,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.subtitle,
-                style: const TextStyle(color: muted, height: 1.4),
               ),
             ],
           ),
@@ -1052,7 +1096,7 @@ class NavItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: selected ? const Color(0x330B5BA7) : Colors.transparent,
+          color: selected ? const Color(0x33246B45) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -1071,6 +1115,100 @@ class NavItem extends StatelessWidget {
       ),
     );
   }
+}
+
+class PingInfoRow extends StatelessWidget {
+  final String ping;
+  final String rssi;
+
+  const PingInfoRow({
+    super.key,
+    required this.ping,
+    required this.rssi,
+  });
+
+  int get level {
+    final match = RegExp(r'-?\\d+').firstMatch(rssi);
+    final value = int.tryParse(match?.group(0) ?? '');
+    if (value == null) return 0;
+    if (value >= -55) return 4;
+    if (value >= -67) return 3;
+    if (value >= -75) return 2;
+    return 1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text('Пинг', style: TextStyle(color: muted)),
+          ),
+          SignalBars(level: level),
+          const SizedBox(width: 9),
+          Text(ping, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class SignalBars extends StatelessWidget {
+  final int level;
+
+  const SignalBars({super.key, required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      height: 18,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(4, (index) {
+          return Container(
+            width: 4,
+            height: 5.0 + index * 4,
+            margin: const EdgeInsets.only(right: 2),
+            decoration: BoxDecoration(
+              color: index < level ? greenSoft : const Color(0xFF344039),
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class RemoteWavesPainter extends CustomPainter {
+  const RemoteWavesPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    for (var i = 0; i < 8; i++) {
+      final path = Path();
+      final baseY = size.height * (0.26 + i * 0.065);
+      final amp = 22.0 + i * 4;
+      path.moveTo(0, baseY);
+      for (double x = 0; x <= size.width; x += 8) {
+        final y = baseY +
+            Math.sin((x / size.width * 6.283 * 1.55) + i * 0.62) * amp;
+        path.lineTo(x, y);
+      }
+      paint.color = Color.fromRGBO(120, 211, 157, 0.18 - i * 0.012);
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class Panel extends StatelessWidget {
