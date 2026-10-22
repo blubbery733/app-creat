@@ -833,7 +833,7 @@ class _LoadingDialogState extends State<LoadingDialog> {
               ),
               const SizedBox(height: 22),
               Text(
-                widget.title + ('.' * dots),
+                widget.title + List<String>.filled(dots, '.').join(),
                 style: const TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.w800,
