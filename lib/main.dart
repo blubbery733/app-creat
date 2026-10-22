@@ -829,11 +829,13 @@ class ApiResult {
 
 class LoadingDialog extends StatefulWidget {
   final String title;
+  final String subtitle;
   final VoidCallback onCancel;
 
   const LoadingDialog({
     super.key,
     required this.title,
+    required this.subtitle,
     required this.onCancel,
   });
 
@@ -988,7 +990,7 @@ class _LoadingDialogState extends State<LoadingDialog> {
                         child: const Text(
                           'ОТМЕНИТЬ',
                           style: TextStyle(
-                            color: Color(0xFF3FA9F5),
+                            color: greenSoft,
                             fontSize: 20,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 0.5,
@@ -1011,14 +1013,12 @@ class _LoadingDialogState extends State<LoadingDialog> {
 class ModeCard extends StatefulWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
   final VoidCallback onTap;
 
   const ModeCard({
     super.key,
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.onTap,
   });
 
