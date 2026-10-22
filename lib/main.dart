@@ -6,13 +6,13 @@ import 'package:flutter/material.dart';
 
 void main() => runApp(const Psr3App());
 
-const bg = Color(0xFF070A08);
-const surface = Color(0xFF101612);
-const surface2 = Color(0xFF151E18);
-const border = Color(0xFF28372D);
-const green = Color(0xFF246B45);
-const greenSoft = Color(0xFF78D39D);
-const muted = Color(0xFFA8B6AC);
+const bg = Color(0xFF111214);
+const surface = Color(0xFF18191C);
+const surface2 = Color(0xFF202226);
+const border = Color(0xFF32353B);
+const green = Color(0xFF0B5BA7);
+const greenSoft = Color(0xFF4AA9F8);
+const muted = Color(0xFFA7A9AE);
 
 class Psr3App extends StatelessWidget {
   const Psr3App({super.key});
@@ -98,30 +98,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget splash() {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'PSR3',
-              style: TextStyle(
-                fontSize: 64,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 10,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'PLAYSTATION REPLAY',
-              style: TextStyle(
-                color: Color(0xFF8E9791),
-                fontSize: 13,
-                letterSpacing: 4,
-              ),
-            ),
-          ],
+        child: Image.asset(
+          'assets/psremake-logo.png',
+          width: 310,
+          filterQuality: FilterQuality.high,
         ),
       ),
     );
@@ -233,12 +216,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> remoteFlow() async {
-    await loadingDialog(
+    final found = await loadingDialog(
       const Duration(seconds: 5),
       'Поиск PSR3',
-      'Проверяем подключение к консоли',
+      'Это может занять несколько минут.',
     );
-    if (!mounted) return;
+    if (!found || !mounted) return;
 
     final code = await askCode();
     if (code == null || !mounted) return;
@@ -251,12 +234,12 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    await loadingDialog(
+    final started = await loadingDialog(
       const Duration(milliseconds: 1800),
       'Подключение',
       'Запускаем Remote Play',
     );
-    if (!mounted) return;
+    if (!started || !mounted) return;
 
     setState(() {
       streamMode = true;
@@ -266,12 +249,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> espFlow() async {
-    await loadingDialog(
+    final found = await loadingDialog(
       const Duration(milliseconds: 1300),
-      'Подключение к ESP32',
-      'Проверяем ' + baseUrl,
+      'Поиск PSR3',
+      'Это может занять несколько минут.',
     );
-    if (!mounted) return;
+    if (!found || !mounted) return;
 
     final result = demoMode
         ? const ApiResult(true, 'Demo', <String, dynamic>{})
@@ -291,23 +274,34 @@ class _HomePageState extends State<HomePage> {
     await refreshInfo();
   }
 
-  Future<void> loadingDialog(
+  Future<bool> loadingDialog(
     Duration duration,
     String title,
     String subtitle,
   ) async {
-    if (!mounted) return;
+    if (!mounted) return false;
 
-    unawaited(showDialog<void>(
+    var dialogOpen = true;
+    final dialogFuture = showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => LoadingDialog(title: title, subtitle: subtitle),
-    ));
+      builder: (dialogContext) => LoadingDialog(
+        title: title,
+        subtitle: subtitle,
+        onCancel: () => Navigator.pop(dialogContext, false),
+      ),
+    ).whenComplete(() => dialogOpen = false);
 
-    await Future<void>.delayed(duration);
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
+    final result = await Future.any<bool>([
+      dialogFuture.then((value) => value ?? false),
+      Future<bool>.delayed(duration, () => true),
+    ]);
+
+    if (result && dialogOpen && mounted) {
+      Navigator.of(context, rootNavigator: true).pop(true);
     }
+
+    return result;
   }
 
   Future<String?> askCode() async {
@@ -785,11 +779,13 @@ class ApiResult {
 class LoadingDialog extends StatefulWidget {
   final String title;
   final String subtitle;
+  final VoidCallback onCancel;
 
   const LoadingDialog({
     super.key,
     required this.title,
     required this.subtitle,
+    required this.onCancel,
   });
 
   @override
@@ -797,14 +793,14 @@ class LoadingDialog extends StatefulWidget {
 }
 
 class _LoadingDialogState extends State<LoadingDialog> {
-  int dots = 1;
+  int activeDot = 0;
   Timer? timer;
 
   @override
   void initState() {
     super.initState();
     timer = Timer.periodic(const Duration(milliseconds: 420), (_) {
-      if (mounted) setState(() => dots = dots == 3 ? 1 : dots + 1);
+      if (mounted) setState(() => activeDot = (activeDot + 1) % 3);
     });
   }
 
@@ -816,32 +812,146 @@ class _LoadingDialogState extends State<LoadingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isSearch = widget.title == 'Поиск PSR3';
+
     return PopScope(
       canPop: false,
       child: Dialog(
-        backgroundColor: surface,
-        child: SizedBox(
-          width: 430,
-          height: 220,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(
-                width: 34,
-                height: 34,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              ),
-              const SizedBox(height: 22),
-              Text(
-                widget.title + List<String>.filled(dots, '.').join(),
-                style: const TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w800,
+        insetPadding: EdgeInsets.zero,
+        backgroundColor: const Color(0xFF111214),
+        shape: const RoundedRectangleBorder(),
+        child: SizedBox.expand(
+          child: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 34,
+                    vertical: 26,
+                  ),
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 26,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF08090A),
+                          borderRadius: BorderRadius.circular(9),
+                          boxShadow: const [
+                            BoxShadow(
+                              blurRadius: 24,
+                              spreadRadius: 8,
+                              color: Color(0x331A1A1A),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          widget.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 31,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        isSearch
+                            ? 'Это может занять несколько минут.'
+                            : widget.subtitle,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFAAAAAF),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      const Spacer(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.desktop_windows_rounded,
+                            color: Colors.white,
+                            size: 45,
+                          ),
+                          const SizedBox(width: 26),
+                          const Icon(
+                            Icons.phone_android_rounded,
+                            color: Colors.white,
+                            size: 44,
+                          ),
+                          const SizedBox(width: 36),
+                          for (var i = 0; i < 3; i++) ...[
+                            AnimatedOpacity(
+                              duration: const Duration(milliseconds: 180),
+                              opacity: i == activeDot ? 1 : 0.45,
+                              child: Container(
+                                width: 15,
+                                height: 15,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            if (i != 2) const SizedBox(width: 22),
+                          ],
+                          const SizedBox(width: 36),
+                          const Icon(
+                            Icons.sports_esports_rounded,
+                            color: Colors.white,
+                            size: 56,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 44),
+                      Container(
+                        width: 500,
+                        height: 82,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(50),
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0x002F3034),
+                              Color(0x663A3C40),
+                              Color(0x88585A5F),
+                              Color(0x663A3C40),
+                              Color(0x002F3034),
+                            ],
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x553E4045),
+                              blurRadius: 28,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(flex: 2),
+                      TextButton(
+                        onPressed: widget.onCancel,
+                        child: const Text(
+                          'ОТМЕНИТЬ',
+                          style: TextStyle(
+                            color: Color(0xFF3FA9F5),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(widget.subtitle, style: const TextStyle(color: muted)),
-            ],
+            ),
           ),
         ),
       ),
@@ -894,7 +1004,7 @@ class _ModeCardState extends State<ModeCard> {
                 width: 58,
                 height: 58,
                 decoration: BoxDecoration(
-                  color: const Color(0x33246B45),
+                  color: const Color(0x330B5BA7),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Icon(widget.icon, color: greenSoft, size: 30),
@@ -942,7 +1052,7 @@ class NavItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: selected ? const Color(0x33246B45) : Colors.transparent,
+          color: selected ? const Color(0x330B5BA7) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
