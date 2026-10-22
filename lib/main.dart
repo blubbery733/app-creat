@@ -2,13 +2,27 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as Math;
+import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'startup_sound.dart';
+import 'visual_assets.dart';
 
-void main() => runApp(const Psr3App());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await ui.loadFontFromList(
+      base64Decode(kZenMaruFontBase64),
+      fontFamily: 'ZenMaru',
+    );
+  } catch (_) {
+    // Fall back to the system font if loading fails.
+  }
+  runApp(const Psr3App());
+}
 
 const bg = Color(0xFF070A08);
 const surface = Color(0xFF101612);
@@ -29,6 +43,7 @@ class Psr3App extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         useMaterial3: true,
+        fontFamily: 'ZenMaru',
         scaffoldBackgroundColor: bg,
         colorScheme: const ColorScheme.dark(
           primary: greenSoft,
@@ -82,6 +97,8 @@ class _HomePageState extends State<HomePage> {
   String freeHeap = '—';
   String largestBlock = '—';
   String wifiRssi = '—';
+  String consoleMode = 'unknown';
+  String consoleError = '—';
   Timer? statusTimer;
   final AudioPlayer remotePlayer = AudioPlayer();
   bool remoteSoundPlayed = false;
@@ -103,6 +120,28 @@ class _HomePageState extends State<HomePage> {
 
   String get baseUrl => 'http://' + ip;
 
+  bool get safeMode {
+    final value = consoleMode.toLowerCase().replaceAll('-', '_');
+    return value == 'safe' || value == 'safe_mode';
+  }
+
+  String get modeLabel {
+    switch (consoleMode.toLowerCase().replaceAll('-', '_')) {
+      case 'on':
+        return 'On';
+      case 'standby':
+        return 'Standby';
+      case 'safe':
+      case 'safe_mode':
+        return 'Safe Mode';
+      case 'update':
+      case 'update_mode':
+        return 'Update Mode';
+      default:
+        return '—';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (showSplash) return splash();
@@ -115,9 +154,10 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Image.asset(
-          'assets/psremake-logo.png',
-          width: 310,
+        child: Image.memory(
+          base64Decode(kStartupControllerImageBase64),
+          width: 360,
+          fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
         ),
       ),
@@ -153,7 +193,7 @@ class _HomePageState extends State<HomePage> {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final esp = ModeCard(
-                        icon: Icons.cable_rounded,
+                        icon: Icons.wifi_rounded,
                         title: 'Прямое подключение',
                         onTap: () => begin(ConnectMode.esp32),
                       );
@@ -228,11 +268,23 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> remoteFlow() async {
-    final found = await loadingDialog(
-      const Duration(seconds: 5),
-      'Поиск PSR3',
-      'Это может занять несколько минут.',
-    );
+    final status = demoMode
+        ? const ApiResult(true, 'Demo', <String, dynamic>{'mode': 'on'})
+        : await getJson('/api/status');
+
+    if (!mounted) return;
+    if (!status.ok) {
+      note(status.message);
+      return;
+    }
+
+    final statusMode = field(status.data, 'mode').toLowerCase();
+    if (statusMode == 'safe' || statusMode == 'safe_mode') {
+      note('Remote Play недоступен в Safe Mode. Используйте «Прямое подключение».');
+      return;
+    }
+
+    final found = await remoteLoadingDialog(const Duration(seconds: 5));
     if (!found || !mounted) return;
 
     final code = await askCode();
@@ -247,7 +299,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     final started = await loadingDialog(
-      const Duration(milliseconds: 1800),
+      const Duration(milliseconds: 1200),
       'Подключение',
       'Запускаем Remote Play',
     );
@@ -257,15 +309,14 @@ class _HomePageState extends State<HomePage> {
       streamMode = true;
       chooseMode = false;
       connected = true;
+      remoteSoundPlayed = false;
     });
     await playRemoteStartupSound();
   }
 
   Future<void> espFlow() async {
-    final found = await loadingDialog(
-      const Duration(milliseconds: 1300),
-      'Поиск PSR3',
-      'Это может занять несколько минут.',
+    final found = await directLoadingDialog(
+      const Duration(milliseconds: 1500),
     );
     if (!found || !mounted) return;
 
@@ -286,6 +337,48 @@ class _HomePageState extends State<HomePage> {
 
     await refreshInfo();
     startStatusPolling();
+  }
+
+  Future<bool> remoteLoadingDialog(Duration duration) async {
+    if (!mounted) return false;
+    return timedDialog(
+      duration,
+      (dialogContext) => RemoteLoadingDialog(
+        onCancel: () => Navigator.pop(dialogContext, false),
+      ),
+    );
+  }
+
+  Future<bool> directLoadingDialog(Duration duration) async {
+    if (!mounted) return false;
+    return timedDialog(
+      duration,
+      (dialogContext) => DirectLoadingDialog(
+        onCancel: () => Navigator.pop(dialogContext, false),
+      ),
+    );
+  }
+
+  Future<bool> timedDialog(
+    Duration duration,
+    Widget Function(BuildContext) builder,
+  ) async {
+    var dialogOpen = true;
+    final dialogFuture = showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: builder,
+    ).whenComplete(() => dialogOpen = false);
+
+    final result = await Future.any<bool>([
+      dialogFuture.then((value) => value ?? false),
+      Future<bool>.delayed(duration, () => true),
+    ]);
+
+    if (result && dialogOpen && mounted) {
+      Navigator.of(context, rootNavigator: true).pop(true);
+    }
+    return result;
   }
 
   Future<bool> loadingDialog(
@@ -461,13 +554,15 @@ class _HomePageState extends State<HomePage> {
                     selected: page == MainPage.system,
                     onTap: () => setState(() => page = MainPage.system),
                   ),
-                  const SizedBox(height: 8),
-                  NavItem(
-                    icon: Icons.settings_rounded,
-                    label: 'Настройки',
-                    selected: page == MainPage.settings,
-                    onTap: () => setState(() => page = MainPage.settings),
-                  ),
+                  if (!safeMode) ...[
+                    const SizedBox(height: 8),
+                    NavItem(
+                      icon: Icons.settings_rounded,
+                      label: 'Настройки',
+                      selected: page == MainPage.settings,
+                      onTap: () => setState(() => page = MainPage.settings),
+                    ),
+                  ],
                   const Spacer(),
                   Text(
                     connected ? 'Подключено' : 'Нет связи',
@@ -492,7 +587,7 @@ class _HomePageState extends State<HomePage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
-                child: page == MainPage.system
+                child: safeMode || page == MainPage.system
                     ? systemPage()
                     : settingsPage(),
               ),
@@ -504,75 +599,139 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget systemPage() {
-    return SingleChildScrollView(
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
+    final connectionPanel = Panel(
+      title: 'Подключение',
+      width: 410,
+      child: Column(
         children: [
-          Panel(
-            title: 'Подключение',
-            width: 410,
-            child: Column(
+          InfoRow(label: 'Статус', value: connected ? 'Подключено' : 'Нет связи'),
+          InfoRow(label: 'Режим', value: modeLabel),
+          InfoRow(label: 'IP', value: ip),
+          PingInfoRow(ping: ping, rssi: wifiRssi),
+          InfoRow(label: 'Прошивка', value: firmware),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => refreshInfo(),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Обновить'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final systemPanel = Panel(
+      title: 'Система',
+      width: 410,
+      child: safeMode
+          ? Column(
               children: [
-                InfoRow(label: 'Статус', value: connected ? 'Подключено' : 'Нет связи'),
-                InfoRow(label: 'IP', value: ip),
-                PingInfoRow(ping: ping, rssi: wifiRssi),
-                InfoRow(label: 'Прошивка', value: firmware),
+                InfoRow(label: 'Свободная память', value: freeHeap),
+                InfoRow(label: 'Ошибка', value: consoleError),
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: refreshInfo,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Обновить'),
+                    onPressed: () => postCommand('/api/restart'),
+                    icon: const Icon(Icons.restart_alt_rounded),
+                    label: const Text('Перезагрузка'),
                   ),
                 ),
               ],
-            ),
-          ),
-          Panel(
-            title: 'Система',
-            width: 410,
-            child: Column(
+            )
+          : Column(
               children: [
                 InfoRow(label: 'Свободная память', value: freeHeap),
                 InfoRow(label: 'Крупнейший блок', value: largestBlock),
                 InfoRow(label: 'Wi-Fi RSSI', value: wifiRssi),
               ],
             ),
-          ),
+    );
 
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: [connectionPanel, systemPanel],
+          ),
+          if (safeMode) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              width: 836,
+              child: FilledButton.icon(
+                onPressed: beginUpdate,
+                icon: const Icon(Icons.system_update_alt_rounded),
+                label: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Text('Update'),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget settingsPage() {
+    if (safeMode) return systemPage();
+
     return SingleChildScrollView(
       child: Wrap(
         spacing: 16,
         runSpacing: 16,
         children: [
           Panel(
-            title: 'Соединение',
-            width: 500,
+            title: 'Режим питания',
+            width: 430,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextFormField(
-                  initialValue: ip,
-                  decoration: const InputDecoration(
-                    labelText: 'IP консоли',
-                    helperText: 'Указывайте только IP. /api/... приложение добавит само.',
-                  ),
-                  onFieldSubmitted: saveIp,
+                InfoRow(label: 'Текущий режим', value: modeLabel),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => setPowerMode('on'),
+                        icon: const Icon(Icons.power_settings_new_rounded),
+                        label: const Text('On'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => setPowerMode('standby'),
+                        icon: const Icon(Icons.bedtime_rounded),
+                        label: const Text('Standby'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Panel(
+            title: 'Управление консолью',
+            width: 430,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => postCommand('/api/restart'),
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: const Text('Перезагрузка'),
                 ),
                 const SizedBox(height: 12),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'По умолчанию: 192.168.4.1',
-                    style: TextStyle(color: muted),
-                  ),
+                OutlinedButton.icon(
+                  onPressed: beginUpdate,
+                  icon: const Icon(Icons.system_update_alt_rounded),
+                  label: const Text('Update'),
                 ),
               ],
             ),
@@ -589,26 +748,6 @@ class _HomePageState extends State<HomePage> {
                 style: TextStyle(color: muted),
               ),
               onChanged: (value) => setState(() => demoMode = value),
-            ),
-          ),
-          Panel(
-            title: 'Управление консолью',
-            width: 430,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FilledButton.icon(
-                  onPressed: () => postCommand('/api/restart'),
-                  icon: const Icon(Icons.restart_alt_rounded),
-                  label: const Text('Перезагрузка'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => postCommand('/api/update-mode'),
-                  icon: const Icon(Icons.system_update_alt_rounded),
-                  label: const Text('Update'),
-                ),
-              ],
             ),
           ),
         ],
@@ -641,6 +780,8 @@ class _HomePageState extends State<HomePage> {
         freeHeap = '0.3 МБ';
         largestBlock = '0.2 МБ';
         wifiRssi = '-48 dBm';
+        consoleMode = 'on';
+        consoleError = '—';
       });
       return;
     }
@@ -667,6 +808,10 @@ class _HomePageState extends State<HomePage> {
       freeHeap = formatMb(data['free_heap']);
       largestBlock = formatMb(data['largest_block']);
       wifiRssi = field(data, 'wifi_rssi');
+      final rawMode = field(data, 'mode');
+      consoleMode = rawMode == '—' ? field(data, 'state') : rawMode;
+      consoleError = field(data, 'error');
+      if (safeMode) page = MainPage.system;
     });
   }
 
@@ -696,14 +841,152 @@ class _HomePageState extends State<HomePage> {
     if (remoteSoundPlayed) return;
     remoteSoundPlayed = true;
     try {
-      await remotePlayer.play(
-        BytesSource(
-          base64Decode(kStartupSoundBase64),
-          mimeType: 'audio/mpeg',
-        ),
-      );
+      final bytes = base64Decode(kStartupSoundBase64);
+      final path =
+          '${Directory.systemTemp.path}${Platform.pathSeparator}psr3_remote_startup.mp3';
+      final file = File(path);
+      if (!await file.exists() || await file.length() != bytes.length) {
+        await file.writeAsBytes(bytes, flush: true);
+      }
+      await remotePlayer.stop();
+      await remotePlayer.setReleaseMode(ReleaseMode.stop);
+      await remotePlayer.play(DeviceFileSource(path));
     } catch (_) {
-      // Audio is non-critical; Remote Play stays usable if playback fails.
+      remoteSoundPlayed = false;
+    }
+  }
+
+  Future<void> setPowerMode(String target) async {
+    final result = demoMode
+        ? const ApiResult(true, 'Demo', <String, dynamic>{})
+        : await postJson('/api/power/$target', const <String, dynamic>{});
+    if (!mounted) return;
+    if (!result.ok) {
+      note(result.message);
+      return;
+    }
+    setState(() => consoleMode = target);
+    note(target == 'on' ? 'Режим On включён' : 'Консоль переведена в Standby');
+    await refreshInfo(silent: true);
+  }
+
+  Future<void> beginUpdate() async {
+    final modeResult = demoMode
+        ? const ApiResult(true, 'Demo', <String, dynamic>{})
+        : await postJson('/api/update-mode', const <String, dynamic>{});
+    if (!mounted) return;
+
+    if (!modeResult.ok) {
+      note(modeResult.message);
+      return;
+    }
+
+    setState(() => consoleMode = 'update');
+
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.any,
+      dialogTitle: 'Выберите прошивку PSR3',
+    );
+    if (!mounted) return;
+    if (picked == null || picked.files.single.path == null) {
+      note('Файл прошивки не выбран');
+      return;
+    }
+
+    final firmwareFile = File(picked.files.single.path!);
+    final dialog = showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        backgroundColor: surface,
+        title: Text('Update Mode'),
+        content: SizedBox(
+          width: 380,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              SizedBox(width: 18),
+              Expanded(child: Text('Отправка прошивки на консоль…')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final result = demoMode
+        ? const ApiResult(true, 'Demo', <String, dynamic>{})
+        : await uploadFirmware(firmwareFile);
+
+    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    await dialog;
+
+    if (!mounted) return;
+    if (result.ok) {
+      note('Прошивка отправлена. Консоль находится в Update Mode.');
+    } else {
+      note(result.message);
+    }
+  }
+
+  Future<ApiResult> uploadFirmware(File file) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final request = await client.postUrl(
+        Uri.parse('$baseUrl/api/update/firmware'),
+      );
+      final length = await file.length();
+      request.headers.contentType = ContentType.binary;
+      request.headers.set(
+        'X-Filename',
+        Uri.encodeComponent(file.uri.pathSegments.last),
+      );
+      request.contentLength = length;
+      await request.addStream(file.openRead());
+      final response = await request.close().timeout(
+        const Duration(minutes: 5),
+      );
+      final body = await utf8.decoder.bind(response).join();
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return ApiResult(
+          false,
+          'Ошибка прошивки: HTTP ${response.statusCode}',
+          const <String, dynamic>{},
+        );
+      }
+      return ApiResult(
+        true,
+        body.trim().isEmpty ? 'OK' : body.trim(),
+        const <String, dynamic>{},
+      );
+    } on TimeoutException {
+      return const ApiResult(
+        false,
+        'Истекло время отправки прошивки',
+        <String, dynamic>{},
+      );
+    } on SocketException catch (e) {
+      return ApiResult(
+        false,
+        'Нет связи с ESP32: ${e.message}',
+        const <String, dynamic>{},
+      );
+    } catch (e) {
+      return ApiResult(
+        false,
+        'Ошибка прошивки: $e',
+        const <String, dynamic>{},
+      );
+    } finally {
+      client.close(force: true);
     }
   }
 
@@ -837,6 +1120,8 @@ class _HomePageState extends State<HomePage> {
       connected = false;
       mode = null;
       page = MainPage.system;
+      consoleMode = 'unknown';
+      consoleError = '—';
     });
   }
 
@@ -853,6 +1138,182 @@ class ApiResult {
   final Map<String, dynamic> data;
 
   const ApiResult(this.ok, this.message, this.data);
+}
+
+class RemoteLoadingDialog extends StatefulWidget {
+  final VoidCallback onCancel;
+
+  const RemoteLoadingDialog({super.key, required this.onCancel});
+
+  @override
+  State<RemoteLoadingDialog> createState() => _RemoteLoadingDialogState();
+}
+
+class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
+  int dot = 0;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(milliseconds: 420), (_) {
+      if (mounted) setState(() => dot = (dot + 1) % 3);
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        insetPadding: EdgeInsets.zero,
+        backgroundColor: const Color(0xFF111214),
+        shape: const RoundedRectangleBorder(),
+        child: SizedBox.expand(
+          child: SafeArea(
+            child: Column(
+              children: [
+                const Spacer(),
+                const Text(
+                  'Поиск PSR3',
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Это может занять несколько минут.',
+                  style: TextStyle(color: muted, fontSize: 17),
+                ),
+                const SizedBox(height: 28),
+                Flexible(
+                  flex: 5,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Image.memory(
+                      base64Decode(kRemoteLoadingImageBase64),
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    3,
+                    (index) => AnimatedOpacity(
+                      duration: const Duration(milliseconds: 160),
+                      opacity: index == dot ? 1 : 0.28,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        margin: const EdgeInsets.symmetric(horizontal: 5),
+                        decoration: const BoxDecoration(
+                          color: greenSoft,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: const Text('ОТМЕНИТЬ'),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DirectLoadingDialog extends StatefulWidget {
+  final VoidCallback onCancel;
+
+  const DirectLoadingDialog({super.key, required this.onCancel});
+
+  @override
+  State<DirectLoadingDialog> createState() => _DirectLoadingDialogState();
+}
+
+class _DirectLoadingDialogState extends State<DirectLoadingDialog> {
+  bool bright = false;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(milliseconds: 550), (_) {
+      if (mounted) setState(() => bright = !bright);
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        backgroundColor: surface,
+        title: const Text('Прямое подключение'),
+        content: SizedBox(
+          width: 420,
+          height: 230,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 450),
+                width: bright ? 96 : 82,
+                height: bright ? 96 : 82,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: bright
+                      ? const Color(0x3328A966)
+                      : const Color(0x221A6F48),
+                ),
+                child: const Icon(
+                  Icons.wifi_rounded,
+                  color: greenSoft,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Подключение к PSR3…',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Проверяем состояние консоли',
+                style: TextStyle(color: muted),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: widget.onCancel,
+            child: const Text('ОТМЕНИТЬ'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class LoadingDialog extends StatefulWidget {
