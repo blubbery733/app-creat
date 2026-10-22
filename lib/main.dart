@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as Math;
+import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'startup_sound.dart';
 
@@ -79,11 +80,10 @@ class _HomePageState extends State<HomePage> {
   MainPage page = MainPage.system;
 
   String ip = '192.168.4.1';
-  String ping = '—';
+  double? pingMs;
   String firmware = '—';
   String freeHeap = '—';
   String largestBlock = '—';
-  String wifiRssi = '—';
   String consoleMode = 'unknown';
   String consoleError = '—';
   Timer? statusTimer;
@@ -226,13 +226,6 @@ class _HomePageState extends State<HomePage> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: surface,
         title: const Text('Подключитесь к сети PSR3'),
-        content: const SizedBox(
-          width: 430,
-          child: Text(
-            'Подключите компьютер к Wi-Fi сети PSR3. После подключения вернитесь в приложение.',
-            style: TextStyle(color: muted, height: 1.45),
-          ),
-        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -260,33 +253,31 @@ class _HomePageState extends State<HomePage> {
         : await getJson('/api/status');
 
     if (!mounted) return;
-    if (!status.ok) {
-      note(status.message);
-      return;
+
+    if (status.ok) {
+      final statusMode = field(status.data, 'mode').toLowerCase();
+      if (statusMode == 'safe' || statusMode == 'safe_mode') {
+        note('Remote Play недоступен в Safe Mode. Используйте «Прямое подключение».');
+        return;
+      }
     }
 
-    final statusMode = field(status.data, 'mode').toLowerCase();
-    if (statusMode == 'safe' || statusMode == 'safe_mode') {
-      note('Remote Play недоступен в Safe Mode. Используйте «Прямое подключение».');
-      return;
-    }
-
-    final found = await remoteLoadingDialog(const Duration(seconds: 5));
+    final found = await remoteLoadingDialog(const Duration(seconds: 4));
     if (!found || !mounted) return;
 
     final code = await askCode();
     if (code == null || !mounted) return;
 
-    final paired = demoMode ? true : await pairRemote(code);
-    if (!mounted) return;
-
-    if (!paired) {
-      note('Код не подтверждён. Проверьте код на телевизоре и соединение с PSR3.');
-      return;
+    if (!demoMode) {
+      final paired = await pairRemote(code);
+      if (!mounted) return;
+      if (!paired) {
+        note('Тестовый Remote Play: продолжаем без подтверждения консоли.');
+      }
     }
 
     final started = await remoteLoadingDialog(
-      const Duration(milliseconds: 1200),
+      const Duration(milliseconds: 950),
     );
     if (!started || !mounted) return;
 
@@ -296,7 +287,10 @@ class _HomePageState extends State<HomePage> {
       connected = true;
       remoteSoundPlayed = false;
     });
-    await playRemoteStartupSound();
+
+    // The startup sound is local to the Windows app and does not wait for
+    // another command from the console.
+    unawaited(playRemoteStartupSound());
   }
 
   Future<void> espFlow() async {
@@ -446,65 +440,90 @@ class _HomePageState extends State<HomePage> {
     return result;
   }
 
+  void exitRemotePlay() {
+    unawaited(remotePlayer.stop());
+    setState(() {
+      streamMode = false;
+      chooseMode = true;
+      connected = false;
+      remoteSoundPlayed = false;
+    });
+  }
+
   Widget stream() {
-    return Scaffold(
-      backgroundColor: const Color(0xFF050806),
-      body: Stack(
-        children: [
-          const Positioned.fill(
-            child: CustomPaint(painter: RemoteWavesPainter()),
-          ),
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0, 0.15),
-                  radius: 1.05,
-                  colors: [
-                    Color(0x2228A966),
-                    Color(0x110F5D3B),
-                    Colors.transparent,
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.escape): exitRemotePlay,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: const Color(0xFF050806),
+          body: Stack(
+            children: [
+              const Positioned.fill(
+                child: CustomPaint(painter: RemoteWavesPainter()),
+              ),
+              Positioned.fill(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(0, 0.15),
+                      radius: 1.05,
+                      colors: [
+                        Color(0x2228A966),
+                        Color(0x110F5D3B),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sports_esports_rounded,
+                      size: 74,
+                      color: greenSoft,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Remote Play',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Подключение установлено',
+                      style: TextStyle(color: muted, fontSize: 15),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'ESC — выйти',
+                      style: TextStyle(color: Color(0xFF657269), fontSize: 13),
+                    ),
                   ],
                 ),
               ),
-            ),
-          ),
-          const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.sports_esports_rounded, size: 74, color: greenSoft),
-                SizedBox(height: 16),
-                Text(
-                  'Remote Play',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+              Positioned(
+                top: 18,
+                right: 18,
+                child: IconButton(
+                  tooltip: 'Выйти из Remote Play (Esc)',
+                  onPressed: exitRemotePlay,
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Color(0xFFA8B6AC),
+                  ),
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'Подключение установлено',
-                  style: TextStyle(color: muted, fontSize: 15),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Positioned(
-            top: 18,
-            right: 18,
-            child: IconButton(
-              tooltip: 'Выйти из Remote Play',
-              onPressed: () {
-                unawaited(remotePlayer.stop());
-                setState(() {
-                  streamMode = false;
-                  chooseMode = true;
-                  connected = false;
-                  remoteSoundPlayed = false;
-                });
-              },
-              icon: const Icon(Icons.close_rounded, color: Color(0xFFA8B6AC)),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -592,7 +611,7 @@ class _HomePageState extends State<HomePage> {
           InfoRow(label: 'Статус', value: connected ? 'Подключено' : 'Нет связи'),
           InfoRow(label: 'Режим', value: modeLabel),
           InfoRow(label: 'IP', value: ip),
-          PingInfoRow(ping: ping, rssi: wifiRssi),
+          PingInfoRow(pingMs: pingMs),
           InfoRow(label: 'Прошивка', value: firmware),
           const SizedBox(height: 14),
           SizedBox(
@@ -630,7 +649,6 @@ class _HomePageState extends State<HomePage> {
               children: [
                 InfoRow(label: 'Свободная память', value: freeHeap),
                 InfoRow(label: 'Крупнейший блок', value: largestBlock),
-                InfoRow(label: 'Wi-Fi RSSI', value: wifiRssi),
               ],
             ),
     );
@@ -671,36 +689,6 @@ class _HomePageState extends State<HomePage> {
         spacing: 16,
         runSpacing: 16,
         children: [
-          Panel(
-            title: 'Режим питания',
-            width: 430,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                InfoRow(label: 'Текущий режим', value: modeLabel),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => setPowerMode('on'),
-                        icon: const Icon(Icons.power_settings_new_rounded),
-                        label: const Text('On'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => setPowerMode('standby'),
-                        icon: const Icon(Icons.bedtime_rounded),
-                        label: const Text('Standby'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
           Panel(
             title: 'Управление консолью',
             width: 430,
@@ -749,7 +737,7 @@ class _HomePageState extends State<HomePage> {
 
   void startStatusPolling() {
     statusTimer?.cancel();
-    statusTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    statusTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && connected && mode == ConnectMode.esp32) {
         refreshInfo(silent: true);
       }
@@ -760,11 +748,10 @@ class _HomePageState extends State<HomePage> {
     if (demoMode) {
       setState(() {
         connected = true;
-        ping = '4 ms';
+        pingMs = 12 + (DateTime.now().millisecond % 18).toDouble();
         firmware = 'Demo';
         freeHeap = '0.3 МБ';
         largestBlock = '0.2 МБ';
-        wifiRssi = '-48 dBm';
         consoleMode = 'on';
         consoleError = '—';
       });
@@ -779,7 +766,7 @@ class _HomePageState extends State<HomePage> {
     if (!result.ok) {
       setState(() {
         connected = false;
-        ping = '—';
+        pingMs = null;
       });
       if (!silent) note(result.message);
       return;
@@ -788,11 +775,10 @@ class _HomePageState extends State<HomePage> {
     final data = result.data;
     setState(() {
       connected = true;
-      ping = '${watch.elapsedMilliseconds} ms';
+      pingMs = watch.elapsedMilliseconds.toDouble();
       firmware = field(data, 'firmware');
       freeHeap = formatMb(data['free_heap']);
       largestBlock = formatMb(data['largest_block']);
-      wifiRssi = field(data, 'wifi_rssi');
       final rawMode = field(data, 'mode');
       consoleMode = rawMode == '—' ? field(data, 'state') : rawMode;
       consoleError = field(data, 'error');
@@ -830,29 +816,21 @@ class _HomePageState extends State<HomePage> {
       final path =
           '${Directory.systemTemp.path}${Platform.pathSeparator}psr3_remote_startup.mp3';
       final file = File(path);
-      if (!await file.exists() || await file.length() != bytes.length) {
-        await file.writeAsBytes(bytes, flush: true);
-      }
+      await file.writeAsBytes(bytes, flush: true);
+
       await remotePlayer.stop();
       await remotePlayer.setReleaseMode(ReleaseMode.stop);
-      await remotePlayer.play(DeviceFileSource(path));
-    } catch (_) {
+      await remotePlayer.setVolume(1.0);
+      await remotePlayer.play(
+        DeviceFileSource(path),
+        volume: 1.0,
+      );
+    } catch (e) {
       remoteSoundPlayed = false;
+      if (mounted) {
+        note('Не удалось воспроизвести звук Remote Play: $e');
+      }
     }
-  }
-
-  Future<void> setPowerMode(String target) async {
-    final result = demoMode
-        ? const ApiResult(true, 'Demo', <String, dynamic>{})
-        : await postJson('/api/power/$target', const <String, dynamic>{});
-    if (!mounted) return;
-    if (!result.ok) {
-      note(result.message);
-      return;
-    }
-    setState(() => consoleMode = target);
-    note(target == 'on' ? 'Режим On включён' : 'Консоль переведена в Standby');
-    await refreshInfo(silent: true);
   }
 
   Future<void> beginUpdate() async {
@@ -1135,14 +1113,16 @@ class RemoteLoadingDialog extends StatefulWidget {
 }
 
 class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
-  int dot = 0;
+  int activeDot = 0;
   Timer? timer;
 
   @override
   void initState() {
     super.initState();
-    timer = Timer.periodic(const Duration(milliseconds: 420), (_) {
-      if (mounted) setState(() => dot = (dot + 1) % 3);
+    timer = Timer.periodic(const Duration(milliseconds: 380), (_) {
+      if (mounted) {
+        setState(() => activeDot = (activeDot + 1) % 3);
+      }
     });
   }
 
@@ -1150,6 +1130,30 @@ class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
   void dispose() {
     timer?.cancel();
     super.dispose();
+  }
+
+  Widget connectionDot(int index) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      width: index == activeDot ? 14 : 11,
+      height: index == activeDot ? 14 : 11,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: index == activeDot
+            ? Colors.white
+            : const Color(0xFF777A80),
+        shape: BoxShape.circle,
+        boxShadow: index == activeDot
+            ? const [
+                BoxShadow(
+                  color: Color(0x88FFFFFF),
+                  blurRadius: 13,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+    );
   }
 
   @override
@@ -1162,57 +1166,120 @@ class _RemoteLoadingDialogState extends State<RemoteLoadingDialog> {
         shape: const RoundedRectangleBorder(),
         child: SizedBox.expand(
           child: SafeArea(
-            child: Column(
-              children: [
-                const Spacer(),
-                const Text(
-                  'Поиск PSR3',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Это может занять несколько минут.',
-                  style: TextStyle(color: muted, fontSize: 17),
-                ),
-                const SizedBox(height: 28),
-                Flexible(
-                  flex: 5,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40),
-                    child: Image.asset(
-                      'assets/remote-loading.webp',
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
-                    ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 820),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 26,
                   ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    3,
-                    (index) => AnimatedOpacity(
-                      duration: const Duration(milliseconds: 160),
-                      opacity: index == dot ? 1 : 0.28,
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        margin: const EdgeInsets.symmetric(horizontal: 5),
-                        decoration: const BoxDecoration(
-                          color: greenSoft,
-                          shape: BoxShape.circle,
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF090A0B),
+                          borderRadius: BorderRadius.circular(9),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x441A1A1A),
+                              blurRadius: 28,
+                              spreadRadius: 7,
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          'Поиск PSR3',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 31,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Это может занять несколько минут.',
+                        style: TextStyle(
+                          color: Color(0xFFAAAAAF),
+                          fontSize: 19,
+                        ),
+                      ),
+                      const Spacer(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.desktop_windows_rounded,
+                            color: Colors.white,
+                            size: 48,
+                          ),
+                          const SizedBox(width: 22),
+                          const Icon(
+                            Icons.phone_android_rounded,
+                            color: Colors.white,
+                            size: 46,
+                          ),
+                          const SizedBox(width: 34),
+                          connectionDot(0),
+                          connectionDot(1),
+                          connectionDot(2),
+                          const SizedBox(width: 34),
+                          const Icon(
+                            Icons.sports_esports_rounded,
+                            color: Colors.white,
+                            size: 62,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 42),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 380),
+                        width: activeDot == 1 ? 530 : 490,
+                        height: activeDot == 1 ? 92 : 78,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(60),
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0x002F3034),
+                              Color(0x553C3E43),
+                              Color(0x99606268),
+                              Color(0x553C3E43),
+                              Color(0x002F3034),
+                            ],
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x6656585D),
+                              blurRadius: 34,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(flex: 2),
+                      TextButton(
+                        onPressed: widget.onCancel,
+                        child: const Text(
+                          'ОТМЕНИТЬ',
+                          style: TextStyle(
+                            color: greenSoft,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                TextButton(
-                  onPressed: widget.onCancel,
-                  child: const Text('ОТМЕНИТЬ'),
-                ),
-                const SizedBox(height: 20),
-              ],
+              ),
             ),
           ),
         ),
@@ -1592,27 +1659,24 @@ class NavItem extends StatelessWidget {
 }
 
 class PingInfoRow extends StatelessWidget {
-  final String ping;
-  final String rssi;
+  final double? pingMs;
 
   const PingInfoRow({
     super.key,
-    required this.ping,
-    required this.rssi,
+    required this.pingMs,
   });
 
-  int get level {
-    final match = RegExp(r'-?\\d+').firstMatch(rssi);
-    final value = int.tryParse(match?.group(0) ?? '');
+  int levelFor(double? value) {
     if (value == null) return 0;
-    if (value >= -55) return 4;
-    if (value >= -67) return 3;
-    if (value >= -75) return 2;
+    if (value <= 35) return 4;
+    if (value <= 70) return 3;
+    if (value <= 130) return 2;
     return 1;
   }
 
   @override
   Widget build(BuildContext context) {
+    final target = pingMs ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
@@ -1620,9 +1684,33 @@ class PingInfoRow extends StatelessWidget {
           const Expanded(
             child: Text('Пинг', style: TextStyle(color: muted)),
           ),
-          SignalBars(level: level),
-          const SizedBox(width: 9),
-          Text(ping, style: const TextStyle(fontWeight: FontWeight.w700)),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: target),
+            duration: const Duration(milliseconds: 650),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) {
+              final displayValue = pingMs == null ? null : value;
+              return Row(
+                children: [
+                  SignalBars(level: levelFor(displayValue)),
+                  const SizedBox(width: 9),
+                  SizedBox(
+                    width: 58,
+                    child: Text(
+                      displayValue == null
+                          ? '—'
+                          : '${displayValue.round()} ms',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
@@ -1637,18 +1725,29 @@ class SignalBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 24,
-      height: 18,
+      width: 28,
+      height: 20,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: List.generate(4, (index) {
-          return Container(
-            width: 4,
-            height: 5.0 + index * 4,
+          final active = index < level;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOut,
+            width: 5,
+            height: 5.0 + index * 4.2,
             margin: const EdgeInsets.only(right: 2),
             decoration: BoxDecoration(
-              color: index < level ? greenSoft : const Color(0xFF344039),
-              borderRadius: BorderRadius.circular(1.5),
+              color: active ? greenSoft : const Color(0xFF344039),
+              borderRadius: BorderRadius.circular(1.8),
+              boxShadow: active
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x4478D39D),
+                        blurRadius: 5,
+                      ),
+                    ]
+                  : null,
             ),
           );
         }),
@@ -1673,7 +1772,7 @@ class RemoteWavesPainter extends CustomPainter {
       path.moveTo(0, baseY);
       for (double x = 0; x <= size.width; x += 8) {
         final y = baseY +
-            Math.sin((x / size.width * 6.283 * 1.55) + i * 0.62) * amp;
+            math.sin((x / size.width * 6.283 * 1.55) + i * 0.62) * amp;
         path.lineTo(x, y);
       }
       paint.color = Color.fromRGBO(120, 211, 157, 0.18 - i * 0.012);
