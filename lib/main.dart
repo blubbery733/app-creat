@@ -868,7 +868,7 @@ class _HomePageState extends State<HomePage> {
 
     setState(() => consoleMode = 'update');
 
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       allowMultiple: false,
       type: FileType.any,
       dialogTitle: 'Выберите прошивку PSR3',
