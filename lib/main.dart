@@ -94,9 +94,10 @@ const games = <Game>[
 
 class PSR3Controller extends ChangeNotifier {
   Stage stage = Stage.connect;
-  bool mock = true;
   bool connecting = false;
-  String esp = 'http://192.168.4.1';
+  bool stateLoaded = false;
+  bool hasEverLoggedIn = false;
+  bool signedIn = false;
   String? error;
   String? avatarPath;
   int signalBars = 3;
@@ -104,14 +105,19 @@ class PSR3Controller extends ChangeNotifier {
 
   final installed = <int>{106};
   final progress = <int, double>{};
+  final removalProgress = <int, double>{};
   final timers = <int, Timer>{};
+  final removalTimers = <int, Timer>{};
   final AudioPlayer audio = AudioPlayer();
   final ImagePicker picker = ImagePicker();
 
-  PSR3Controller() { unawaited(loadSavedState()); }
+  PSR3Controller() {
+    unawaited(loadSavedState());
+  }
 
   bool isInstalled(int id) => installed.contains(id);
   bool isInstalling(int id) => progress.containsKey(id);
+  bool isRemoving(int id) => removalProgress.containsKey(id);
 
   Color get signalColor {
     if (signalBars <= 1) return const Color(0xFFE64C4C);
@@ -120,41 +126,67 @@ class PSR3Controller extends ChangeNotifier {
     return C.blue;
   }
 
-  int get installedFreeCount => games.where((g) => !g.isPaid && installed.contains(g.id)).length;
+  int get installedFreeCount =>
+      games.where((g) => !g.isPaid && installed.contains(g.id)).length;
   int get freeGamesCount => games.where((g) => !g.isPaid).length;
   int get trophyCount => installedFreeCount;
   int get goldCount => installedFreeCount ~/ 3;
-  double get collectionProgress => freeGamesCount == 0 ? 0 : installedFreeCount / freeGamesCount;
-  int get installedSizeMb => games.where((g) => installed.contains(g.id)).fold(0, (sum, g) => sum + g.sizeMb);
+  double get collectionProgress =>
+      freeGamesCount == 0 ? 0 : installedFreeCount / freeGamesCount;
+  int get installedSizeMb => games
+      .where((g) => installed.contains(g.id))
+      .fold(0, (sum, g) => sum + g.sizeMb);
 
   Future<void> loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
     final savedGames = prefs.getStringList('installed_game_ids_v4');
     final savedAvatar = prefs.getString('avatar_path');
+
+    hasEverLoggedIn = prefs.getBool('has_ever_logged_in') ?? false;
+    signedIn = prefs.getBool('signed_in') ?? false;
+
     if (savedGames != null) {
       installed
         ..clear()
         ..addAll(savedGames.map(int.tryParse).whereType<int>());
-      if (installed.isEmpty) installed.add(106);
     }
-    if (savedAvatar != null && File(savedAvatar).existsSync()) avatarPath = savedAvatar;
+
+    if (savedAvatar != null && File(savedAvatar).existsSync()) {
+      avatarPath = savedAvatar;
+    }
+
+    stage = signedIn ? Stage.ready : Stage.connect;
+    stateLoaded = true;
     notifyListeners();
   }
 
   Future<void> saveInstalled() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('installed_game_ids_v4', installed.map((id) => id.toString()).toList());
+    await prefs.setStringList(
+      'installed_game_ids_v4',
+      installed.map((id) => id.toString()).toList(),
+    );
   }
 
   Future<void> connect() async {
     if (connecting) return;
+
     connecting = true;
     error = null;
     notifyListeners();
+
     await Future<void>.delayed(const Duration(seconds: 4));
+
     connecting = false;
     stage = Stage.ready;
     signalBars = 3;
+    hasEverLoggedIn = true;
+    signedIn = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_ever_logged_in', true);
+    await prefs.setBool('signed_in', true);
+
     notifyListeners();
   }
 
@@ -166,7 +198,10 @@ class PSR3Controller extends ChangeNotifier {
   }
 
   Future<bool> install(Game game) async {
-    if (game.isPaid || isInstalled(game.id) || isInstalling(game.id)) {
+    if (game.isPaid ||
+        isInstalled(game.id) ||
+        isInstalling(game.id) ||
+        isRemoving(game.id)) {
       await playSound('error.mp3');
       return false;
     }
@@ -203,17 +238,46 @@ class PSR3Controller extends ChangeNotifier {
   }
 
   Future<void> uninstall(Game game) async {
-    if (!isInstalled(game.id) || isInstalling(game.id)) {
+    if (!isInstalled(game.id) ||
+        isInstalling(game.id) ||
+        isRemoving(game.id)) {
       await playSound('error.mp3');
       return;
     }
 
-    installed.remove(game.id);
-    if (lastInstalledGameId == game.id) {
-      lastInstalledGameId = null;
-    }
-    await saveInstalled();
+    removalProgress[game.id] = 0;
     notifyListeners();
+
+    final completer = Completer<void>();
+    var elapsed = 0;
+    const total = 3500;
+
+    removalTimers[game.id] = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (timer) async {
+        elapsed += 250;
+        final value = (elapsed / total).clamp(0.0, 1.0);
+        removalProgress[game.id] = value;
+
+        if (value >= 1) {
+          timer.cancel();
+          removalTimers.remove(game.id);
+          removalProgress.remove(game.id);
+          installed.remove(game.id);
+
+          if (lastInstalledGameId == game.id) {
+            lastInstalledGameId = null;
+          }
+
+          await saveInstalled();
+          completer.complete();
+        }
+
+        notifyListeners();
+      },
+    );
+
+    return completer.future;
   }
 
   void clearInstallNotice() {
@@ -222,28 +286,48 @@ class PSR3Controller extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logout() {
+  Future<void> logout() async {
     connecting = false;
     error = null;
+    signedIn = false;
     stage = Stage.connect;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('signed_in', false);
+
     notifyListeners();
   }
 
   Future<void> pickAvatar() async {
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 88, maxWidth: 1200, maxHeight: 1200);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1200,
+      maxHeight: 1200,
+    );
+
     if (picked == null) return;
+
     final dir = await getApplicationDocumentsDirectory();
     final target = dir.path + '/psr3_avatar.jpg';
+
     await File(picked.path).copy(target);
     avatarPath = target;
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('avatar_path', target);
+
     notifyListeners();
   }
 
   @override
   void dispose() {
-    for (final timer in timers.values) { timer.cancel(); }
+    for (final timer in timers.values) {
+      timer.cancel();
+    }
+    for (final timer in removalTimers.values) {
+      timer.cancel();
+    }
     unawaited(audio.dispose());
     super.dispose();
   }
