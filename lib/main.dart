@@ -377,7 +377,6 @@ class _ShellState extends State<Shell> {
 
   void select(int value) {
     setState(() => index = value);
-    unawaited(widget.controller.playSound('install.mp3'));
   }
 
   @override
@@ -1112,58 +1111,27 @@ class HeroCard extends StatelessWidget {
 class MiniCard extends StatelessWidget {
   final Game game;
   final VoidCallback onTap;
-
-  const MiniCard({
-    super.key,
-    required this.game,
-    required this.onTap,
-  });
+  const MiniCard({super.key, required this.game, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 205,
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: C.card,
-          borderRadius: BorderRadius.circular(16),
-        ),
+      child: SizedBox(
+        width: 155,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: C.card2,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(
-                game.icon,
-                color: C.accent,
-              ),
+            SizedBox(
+              width: 155,
+              height: 140,
+              child: ClipRRect(borderRadius: BorderRadius.circular(16), child: GameArtwork(game: game)),
             ),
-            const Spacer(),
-            Text(
-              game.name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              game.developer,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: C.muted,
-                fontSize: 12,
-              ),
-            ),
+            const SizedBox(height: 8),
+            Text(game.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text(game.developer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted, fontSize: 11)),
           ],
         ),
       ),
@@ -1171,130 +1139,64 @@ class MiniCard extends StatelessWidget {
   }
 }
 
+
+
 class GameTile extends StatelessWidget {
   final Game game;
   final PSR3Controller controller;
   final VoidCallback onTap;
-
-  const GameTile({
-    super.key,
-    required this.game,
-    required this.controller,
-    required this.onTap,
-  });
+  const GameTile({super.key, required this.game, required this.controller, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final installed = controller.isInstalled(game.id);
     final installing = controller.isInstalling(game.id);
     final p = controller.progress[game.id] ?? 0;
+    final remain = (game.seconds * (1 - p)).ceil();
+    final remainText = remain < 60
+        ? remain.toString() + ' сек'
+        : (remain ~/ 60).toString() + ' мин ' + (remain % 60).toString() + ' сек';
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(15),
       child: Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: C.card,
-          borderRadius: BorderRadius.circular(15),
-        ),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(15)),
         child: Row(
           children: [
-            Container(
+            SizedBox(
               width: 74,
               height: 74,
-              decoration: BoxDecoration(
-                color: C.card2,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(
-                game.icon,
-                size: 35,
-                color: C.accent,
-              ),
+              child: ClipRRect(borderRadius: BorderRadius.circular(13), child: GameArtwork(game: game)),
             ),
             const SizedBox(width: 13),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          game.name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      if (game.beta) ...[
-                        const SizedBox(width: 7),
-                        const Icon(
-                          Icons.science_rounded,
-                          size: 16,
-                          color: C.accent,
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    game.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: C.muted,
-                      fontSize: 12.5,
-                    ),
-                  ),
+                  Text(game.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text(game.developer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted, fontSize: 12)),
                   const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      Icon(
-                        installing
-                            ? Icons.downloading_rounded
-                            : installed
-                                ? Icons.check_circle_rounded
-                                : Icons.lock_open_rounded,
-                        size: 16,
-                        color: installing || installed
-                            ? C.accent
-                            : C.muted,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        installing
-                            ? 'Установка ' +
-                                (p * 100).round().toString() +
-                                '%'
-                            : installed
-                                ? 'Установлено'
-                                : 'Бесплатно • 13+',
-                        style: TextStyle(
-                          color: installing || installed
-                              ? C.accent
-                              : C.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
+                  if (installing)
+                    Text('Установка ' + (p * 100).round().toString() + '% • осталось ' + remainText, style: const TextStyle(color: C.blue, fontSize: 11.5, fontWeight: FontWeight.w700))
+                  else if (installed)
+                    const Text('Установлено', style: TextStyle(color: C.accent, fontSize: 12, fontWeight: FontWeight.w800))
+                  else
+                    Text(game.isPaid ? '36,50 ₴' : 'Бесплатно', style: const TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: C.muted,
-            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.white),
           ],
         ),
       ),
     );
   }
 }
+
+
 
 class AvatarView extends StatelessWidget {
   final PSR3Controller controller;
@@ -1346,82 +1248,54 @@ class Trophy extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
-
-  const Trophy({
-    super.key,
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+  const Trophy({super.key, required this.icon, required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        vertical: 17,
-        horizontal: 8,
-      ),
-      decoration: BoxDecoration(
-        color: C.card,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            color: C.accent,
-          ),
-          const SizedBox(height: 7),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: C.muted,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 17, horizontal: 8),
+      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(15)),
+      child: Column(children: [
+        Icon(icon, color: Colors.white),
+        const SizedBox(height: 7),
+        Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        Text(label, textAlign: TextAlign.center, style: const TextStyle(color: C.muted, fontSize: 12)),
+      ]),
     );
   }
 }
 
-class Signal extends StatelessWidget {
-  final bool mock;
 
-  const Signal({
-    super.key,
-    required this.mock,
-  });
+
+class Signal extends StatelessWidget {
+  final PSR3Controller controller;
+  const Signal({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: mock ? 'ESP: Mock Mode' : 'ESP32 подключена',
+    return SizedBox(
+      width: 31,
+      height: 24,
       child: Row(
-        children: [
-          for (var i = 0; i < 4; i++)
-            Container(
-              width: 4,
-              height: 8.0 + i * 4,
-              margin: const EdgeInsets.only(left: 3),
-              decoration: BoxDecoration(
-                color: i < 3 ? C.accent : C.muted,
-                borderRadius: BorderRadius.circular(2),
-              ),
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(4, (i) {
+          final active = i < controller.signalBars;
+          return Container(
+            width: 5,
+            height: 7.0 + i * 5,
+            margin: const EdgeInsets.only(left: 3),
+            decoration: BoxDecoration(
+              color: active ? controller.signalColor : C.card2,
+              borderRadius: BorderRadius.circular(2),
             ),
-        ],
+          );
+        }),
       ),
     );
   }
 }
+
+
 
 void openGame(
   BuildContext context,
@@ -1442,75 +1316,57 @@ Future<void> showSettings(
   BuildContext context,
   PSR3Controller controller,
 ) async {
-  final field = TextEditingController(text: controller.esp);
-
-  await showDialog<void>(
+  await showModalBottomSheet<void>(
     context: context,
-    builder: (context) {
-      return AlertDialog(
-        backgroundColor: C.card,
-        title: const Row(
+    backgroundColor: C.card,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.settings_rounded,
-              color: C.accent,
-            ),
-            SizedBox(width: 8),
-            Text('Настройки PSR3'),
+            const Row(children: [
+              Icon(Icons.settings_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Text('Настройки', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
+            ]),
+            const SizedBox(height: 20),
+            const _SettingInfo(icon: Icons.info_outline_rounded, title: 'Версия приложения', value: appVersionLabel),
+            const SizedBox(height: 10),
+            const _SettingInfo(icon: Icons.calendar_month_rounded, title: 'Полный релиз', value: fullReleaseDate),
+            const SizedBox(height: 10),
+            const _SettingInfo(icon: Icons.volume_up_rounded, title: 'Звук интерфейса', value: 'Только кнопка «Установить»'),
           ],
         ),
-        content: SizedBox(
-          width: 430,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Mock Mode'),
-                subtitle: const Text(
-                  'Тест приложения без ESP32',
-                  style: TextStyle(color: C.muted),
-                ),
-                value: controller.mock,
-                onChanged: controller.setMock,
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: field,
-                decoration: const InputDecoration(
-                  labelText: 'Адрес ESP32',
-                  hintText: 'http://192.168.4.1',
-                  filled: true,
-                  fillColor: C.card2,
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: C.accent,
-              foregroundColor: Colors.black,
-            ),
-            onPressed: () {
-              controller.setEsp(field.text);
-              Navigator.pop(context);
-            },
-            child: const Text(
-              'Сохранить',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
-      );
-    },
+      ),
+    ),
   );
+}
 
-  field.dispose();
+class _SettingInfo extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  const _SettingInfo({required this.icon, required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: C.card2, borderRadius: BorderRadius.circular(16)),
+      child: Row(children: [
+        Icon(icon, color: Colors.white),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(value, style: const TextStyle(color: C.muted, fontSize: 12.5)),
+        ])),
+      ]),
+    );
+  }
 }
