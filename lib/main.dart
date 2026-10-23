@@ -98,6 +98,7 @@ class PSR3Controller extends ChangeNotifier {
   String? error;
   String? avatarPath;
   int signalBars = 3;
+  int? lastInstalledGameId;
 
   final installed = <int>{106};
   final progress = <int, double>{};
@@ -155,30 +156,75 @@ class PSR3Controller extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> install(Game game) async {
-    if (game.isPaid || isInstalled(game.id) || isInstalling(game.id)) return false;
+  Future<void> playSound(String file) async {
     try {
       await audio.stop();
-      await audio.play(AssetSource('audio/install.mp3'));
+      await audio.play(AssetSource('audio/' + file));
     } catch (_) {}
+  }
+
+  Future<bool> install(Game game) async {
+    if (game.isPaid || isInstalled(game.id) || isInstalling(game.id)) {
+      await playSound('error.mp3');
+      return false;
+    }
+
+    await playSound('install.mp3');
     progress[game.id] = 0;
     notifyListeners();
+
     var elapsed = 0;
     final total = game.seconds * 1000;
-    timers[game.id] = Timer.periodic(const Duration(milliseconds: 250), (timer) async {
-      elapsed += 250;
-      final value = (elapsed / total).clamp(0.0, 1.0);
-      progress[game.id] = value;
-      if (value >= 1) {
-        timer.cancel();
-        timers.remove(game.id);
-        progress.remove(game.id);
-        installed.add(game.id);
-        await saveInstalled();
-      }
-      notifyListeners();
-    });
+
+    timers[game.id] = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (timer) async {
+        elapsed += 250;
+        final value = (elapsed / total).clamp(0.0, 1.0);
+        progress[game.id] = value;
+
+        if (value >= 1) {
+          timer.cancel();
+          timers.remove(game.id);
+          progress.remove(game.id);
+          installed.add(game.id);
+          lastInstalledGameId = game.id;
+          await saveInstalled();
+          await playSound('notification.mp3');
+        }
+
+        notifyListeners();
+      },
+    );
+
     return true;
+  }
+
+  Future<void> uninstall(Game game) async {
+    if (!isInstalled(game.id) || isInstalling(game.id)) {
+      await playSound('error.mp3');
+      return;
+    }
+
+    installed.remove(game.id);
+    if (lastInstalledGameId == game.id) {
+      lastInstalledGameId = null;
+    }
+    await saveInstalled();
+    notifyListeners();
+  }
+
+  void clearInstallNotice() {
+    if (lastInstalledGameId == null) return;
+    lastInstalledGameId = null;
+    notifyListeners();
+  }
+
+  void logout() {
+    connecting = false;
+    error = null;
+    stage = Stage.connect;
+    notifyListeners();
   }
 
   Future<void> pickAvatar() async {
