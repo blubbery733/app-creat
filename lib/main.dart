@@ -666,222 +666,85 @@ class LibraryPage extends StatelessWidget {
 
 class ProfilePage extends StatelessWidget {
   final PSR3Controller controller;
-
   const ProfilePage({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (_, __) {
-        final installedGames = games
-            .where((g) => controller.isInstalled(g.id))
-            .take(4)
-            .toList();
-
-        return Frame(
-          ListView(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 26),
-            children: [
-              const Text(
-                'SONY',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 3,
-                ),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  GestureDetector(
-                    onDoubleTap: () async {
-                      await controller.pickAvatar();
-                    },
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        AvatarView(
-                          controller: controller,
-                          size: 92,
-                        ),
-                        Positioned(
-                          right: -2,
-                          bottom: -2,
-                          child: Container(
-                            width: 30,
-                            height: 30,
-                            decoration: const BoxDecoration(
-                              color: C.accent,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.photo_camera_rounded,
-                              size: 17,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Максим Волошин',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        SizedBox(height: 5),
-                        Text(
-                          'Дважды нажми на аватар, чтобы выбрать свою фотографию',
-                          style: TextStyle(
-                            color: C.muted,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-              const Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Уровень 12',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(height: 7),
-                        LinearProgressIndicator(
-                          value: .68,
-                          minHeight: 8,
-                          backgroundColor: C.card,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(C.accent),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 18),
-                  Flexible(
-                    child: Text(
-                      'PSR3 (Playstation 3 Remale)',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        color: C.muted,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 30),
-              SectionTitle(
-                icon: Icons.emoji_events_rounded,
-                title: 'Игровые призы',
-              ),
-              const SizedBox(height: 12),
-              const Row(
-                children: [
-                  Expanded(
-                    child: Trophy(
-                      icon: Icons.emoji_events_rounded,
-                      value: '18',
-                      label: 'Трофеев',
-                    ),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Trophy(
-                      icon: Icons.workspace_premium_rounded,
-                      value: '4',
-                      label: 'Золотых',
-                    ),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Trophy(
-                      icon: Icons.stars_rounded,
-                      value: '68%',
-                      label: 'Прогресс',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 30),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.download_done_rounded,
-                    color: C.accent,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Установленные игры',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    installedGames.length.toString() + '/4',
-                    style: const TextStyle(color: C.muted),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ...installedGames.map(
-                (game) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: GameTile(
-                    game: game,
-                    controller: controller,
-                    onTap: () => openGame(context, controller, game),
-                  ),
-                ),
-              ),
-            ],
+    final used = controller.installedSizeMb;
+    const total = 2048;
+    return Frame(
+      ListView(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 26),
+        children: [
+          const Center(child: Text('Sony • R Studio', style: TextStyle(color: C.muted, fontWeight: FontWeight.w700))),
+          const SizedBox(height: 22),
+          Center(child: Column(children: [
+            GestureDetector(onTap: controller.pickAvatar, child: AvatarView(controller: controller, size: 92)),
+            const SizedBox(height: 12),
+            const Text('Максим Волошин', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            const Text(profileNick, style: TextStyle(color: C.blue)),
+          ])),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
+            child: Row(children: [
+              Container(width: 11, height: 11, decoration: BoxDecoration(shape: BoxShape.circle, color: controller.signalColor)),
+              const SizedBox(width: 10),
+              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('PSR3', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                Text('PlayStation 3 Remake', style: TextStyle(color: C.muted)),
+              ])),
+              Signal(controller: controller),
+            ]),
           ),
-        );
-      },
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.sd_storage_rounded, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Размер игр', style: TextStyle(fontWeight: FontWeight.w900)),
+              ]),
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: (used / total).clamp(0.0, 1.0),
+                minHeight: 9,
+                backgroundColor: C.card2,
+                valueColor: const AlwaysStoppedAnimation<Color>(C.blue),
+              ),
+              const SizedBox(height: 8),
+              Text(used.toString() + ' МБ занято • ' + (total - used).toString() + ' МБ свободно', style: const TextStyle(color: C.muted, fontSize: 12)),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: Trophy(icon: Icons.emoji_events_rounded, value: controller.trophyCount.toString(), label: 'Трофеев')),
+            const SizedBox(width: 10),
+            Expanded(child: Trophy(icon: Icons.workspace_premium_rounded, value: controller.goldCount.toString(), label: 'Золотых')),
+            const SizedBox(width: 10),
+            Expanded(child: Trophy(icon: Icons.bar_chart_rounded, value: (controller.collectionProgress * 100).round().toString() + '%', label: 'Прогресс')),
+          ]),
+        ],
+      ),
     );
   }
 }
 
+
+
 class GamePage extends StatelessWidget {
   final PSR3Controller controller;
   final Game game;
+  const GamePage({super.key, required this.controller, required this.game});
 
-  const GamePage({
-    super.key,
-    required this.controller,
-    required this.game,
-  });
-
-  String formatDuration(int seconds) {
-    if (seconds < 60) return seconds.toString() + ' сек.';
-    if (seconds == 60) return '1 мин.';
-    if (seconds % 60 == 0) {
-      return (seconds ~/ 60).toString() + ' мин.';
-    }
-    return (seconds ~/ 60).toString() +
-        ' мин. ' +
-        (seconds % 60).toString() +
-        ' сек.';
+  String remaining(double p) {
+    final sec = (game.seconds * (1 - p)).ceil();
+    if (sec < 60) return sec.toString() + ' сек';
+    return (sec ~/ 60).toString() + ' мин ' + (sec % 60).toString() + ' сек';
   }
 
   @override
@@ -892,292 +755,89 @@ class GamePage extends StatelessWidget {
         final installed = controller.isInstalled(game.id);
         final installing = controller.isInstalling(game.id);
         final p = controller.progress[game.id] ?? 0;
-
         return Scaffold(
-          appBar: AppBar(
-            backgroundColor: C.bg,
-            surfaceTintColor: Colors.transparent,
-            title: const Row(
-              children: [
-                Icon(
-                  Icons.shopping_bag_rounded,
-                  color: C.accent,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'PSR Store',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ],
-            ),
-          ),
+          appBar: AppBar(backgroundColor: C.bg, foregroundColor: Colors.white, title: Text(game.name)),
           body: Frame(
             ListView(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 34),
               children: [
-                Container(
-                  height: 300,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: game.id == 1
-                          ? const [
-                              Color(0xFF405B78),
-                              Color(0xFF17293F),
-                              C.bg,
-                            ]
-                          : const [
-                              Color(0xFF11452A),
-                              Color(0xFF0F291D),
-                              C.bg,
-                            ],
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      game.icon,
-                      size: 160,
-                      color: Colors.white.withOpacity(.84),
-                    ),
-                  ),
-                ),
+                SizedBox(height: 280, child: ClipRRect(borderRadius: BorderRadius.circular(20), child: GameArtwork(game: game))),
                 const SizedBox(height: 18),
-                Text(
-                  game.name,
-                  style: const TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  game.developer,
-                  style: const TextStyle(
-                    color: C.muted,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    const InfoChip(
-                      icon: Icons.info_rounded,
-                      text: 'Информация',
-                    ),
-                    const InfoChip(
-                      icon: Icons.child_care_rounded,
-                      text: '13+',
-                    ),
-                    if (game.beta)
-                      const InfoChip(
-                        icon: Icons.science_rounded,
-                        text: 'Beta',
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                const StoreInfoCard(),
+                if (game.newRelease)
+                  Align(alignment: Alignment.centerLeft, child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(color: C.blue, borderRadius: BorderRadius.circular(20)),
+                    child: const Text('Новинка', style: TextStyle(fontWeight: FontWeight.w800)),
+                  )),
+                if (game.newRelease) const SizedBox(height: 9),
+                Text(game.name, style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                Text(game.developer, style: const TextStyle(color: C.muted)),
+                if (game.rating.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(game.rating, style: const TextStyle(color: C.muted, fontSize: 12)),
+                ],
                 const SizedBox(height: 18),
                 Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: C.card,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(
-                            Icons.lock_open_rounded,
-                            color: C.accent,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Бесплатно',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 13),
-                      if (installing) ...[
-                        LinearProgressIndicator(
-                          value: p,
-                          minHeight: 8,
-                          backgroundColor: C.card2,
-                          valueColor:
-                              const AlwaysStoppedAnimation<Color>(C.accent),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.downloading_rounded,
-                              size: 18,
-                              color: C.accent,
-                            ),
-                            const SizedBox(width: 7),
-                            Expanded(
-                              child: Text(
-                                'Установка ' +
-                                    (p * 100).round().toString() +
-                                    '% • ' +
-                                    formatDuration(game.seconds),
-                                style: const TextStyle(color: C.muted),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ] else
-                        SizedBox(
-                          height: 50,
-                          child: FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: C.accent,
-                              foregroundColor: Colors.black,
-                              disabledBackgroundColor:
-                                  Colors.white.withOpacity(.14),
-                              disabledForegroundColor: C.muted,
-                            ),
-                            onPressed: installed
-                                ? null
-                                : () async {
-                                    final ok =
-                                        await controller.install(game);
-
-                                    if (!context.mounted || ok) return;
-
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'ESP32 не принял Game ID ' +
-                                              game.id.toString(),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                            icon: Icon(
-                              installed
-                                  ? Icons.check_circle_rounded
-                                  : Icons.download_rounded,
-                            ),
-                            label: Text(
-                              installed ? 'Установлено' : 'Скачать',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.memory_rounded,
-                            color: C.muted,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              'Game ID: ' +
-                                  game.id.toString() +
-                                  ' • команда отправляется на ESP32 при старте',
-                              style: const TextStyle(
-                                color: C.muted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
+                  child: Column(children: [
+                    Row(children: [
+                      const Icon(Icons.sd_storage_rounded, color: Colors.white),
+                      const SizedBox(width: 9),
+                      const Expanded(child: Text('Размер игры', style: TextStyle(fontWeight: FontWeight.w800))),
+                      Text(game.sizeMb.toString() + ' МБ', style: const TextStyle(fontWeight: FontWeight.w900)),
+                    ]),
+                    const SizedBox(height: 11),
+                    LinearProgressIndicator(
+                      value: (game.sizeMb / 350).clamp(0.0, 1.0),
+                      minHeight: 8,
+                      backgroundColor: C.card2,
+                      valueColor: const AlwaysStoppedAnimation<Color>(C.blue),
+                    ),
+                  ]),
                 ),
-                const SizedBox(height: 26),
-                const Feature(
-                  icon: Icons.sports_esports_rounded,
-                  text: 'Поддерживается контроллер',
-                ),
-                const Feature(
-                  icon: Icons.memory_rounded,
-                  text: 'Установка управляется через ESP32',
-                ),
-                Feature(
-                  icon: Icons.timer_rounded,
-                  text: 'Время установки: ' + formatDuration(game.seconds),
-                ),
-                if (game.beta)
-                  const Feature(
-                    icon: Icons.science_rounded,
-                    text: 'Бета-версия',
-                  ),
                 const SizedBox(height: 18),
-                SectionTitle(
-                  icon: Icons.child_care_rounded,
-                  title: 'Возрастная категория',
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Container(
-                      width: 92,
-                      height: 92,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE83C2F),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 5,
-                        ),
-                      ),
-                      child: const Text(
-                        '13+',
-                        style: TextStyle(
-                          fontSize: 33,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Text(
-                        'Игра предназначена для игроков от 13 лет.',
-                        style: TextStyle(color: C.muted),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                SectionTitle(
-                  icon: Icons.description_rounded,
-                  title: 'Описание игры',
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: C.card,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    game.description,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      height: 1.55,
+                Text(game.description, style: const TextStyle(fontSize: 15, height: 1.5)),
+                const SizedBox(height: 24),
+                if (game.isPaid) ...[
+                  const Text('36,50 ₴', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 52,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(disabledBackgroundColor: Colors.white, disabledForegroundColor: Colors.black87),
+                      onPressed: null,
+                      child: const Text('Функция оплаты пока недоступна', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ),
-                ),
+                ] else if (installing) ...[
+                  Row(children: [
+                    Expanded(child: Text('Установка ' + (p * 100).round().toString() + '%', style: const TextStyle(fontWeight: FontWeight.w900))),
+                    Text('Осталось ' + remaining(p), style: const TextStyle(color: C.muted)),
+                  ]),
+                  const SizedBox(height: 9),
+                  LinearProgressIndicator(value: p, minHeight: 10, backgroundColor: C.card2, valueColor: const AlwaysStoppedAnimation<Color>(C.blue)),
+                ] else if (installed)
+                  Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(color: C.accent.withOpacity(.22), borderRadius: BorderRadius.circular(16)),
+                    child: const Row(children: [
+                      Icon(Icons.check_circle_rounded, color: Colors.white),
+                      SizedBox(width: 9),
+                      Text('Установлено', style: TextStyle(fontWeight: FontWeight.w900)),
+                    ]),
+                  )
+                else
+                  SizedBox(
+                    height: 52,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(backgroundColor: C.accent, foregroundColor: Colors.white),
+                      onPressed: () => controller.install(game),
+                      icon: const Icon(Icons.download_rounded, color: Colors.white),
+                      label: const Text('Установить', style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1186,6 +846,29 @@ class GamePage extends StatelessWidget {
     );
   }
 }
+
+class GameArtwork extends StatelessWidget {
+  final Game game;
+  const GameArtwork({super.key, required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    if (game.coverAsset != null) {
+      return ColoredBox(
+        color: C.card2,
+        child: SvgPicture.asset(game.coverAsset!, fit: BoxFit.cover),
+      );
+    }
+    return Container(
+      color: C.card2,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(14),
+      child: const Text('MP3D TEST', textAlign: TextAlign.center, style: TextStyle(color: C.muted, fontWeight: FontWeight.w900, fontSize: 20)),
+    );
+  }
+}
+
+
 
 class SectionTitle extends StatelessWidget {
   final IconData icon;
