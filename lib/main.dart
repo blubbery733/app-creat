@@ -1928,20 +1928,6 @@ class InfoRow extends StatelessWidget {
               ],
             ),
           ),
-          Panel(
-            title: 'Тестирование',
-            width: 360,
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: demoMode,
-              title: const Text('Демо-режим'),
-              subtitle: const Text(
-                'Проверка интерфейса без реальной консоли.',
-                style: TextStyle(color: muted),
-              ),
-              onChanged: (value) => setState(() => demoMode = value),
-            ),
-          ),
         ],
       ),
     );
@@ -1964,18 +1950,6 @@ class InfoRow extends StatelessWidget {
   }
 
   Future<void> refreshInfo({bool silent = false}) async {
-    if (demoMode) {
-      setState(() {
-        connected = true;
-        pingMs = 12 + (DateTime.now().millisecond % 18).toDouble();
-        firmware = 'Demo';
-        freeHeap = '0.3 МБ';
-        largestBlock = '0.2 МБ';
-        consoleMode = 'on';
-        consoleError = '—';
-      });
-      return;
-    }
 
     final watch = Stopwatch()..start();
     final result = await getJson('/api/status');
@@ -2053,9 +2027,7 @@ class InfoRow extends StatelessWidget {
   }
 
   Future<void> beginUpdate() async {
-    final modeResult = demoMode
-        ? const ApiResult(true, 'Demo', <String, dynamic>{})
-        : await postJson('/api/update-mode', const <String, dynamic>{});
+    final modeResult = await postJson('/api/update-mode', const <String, dynamic>{});
     if (!mounted) return;
 
     if (!modeResult.ok) {
@@ -2100,9 +2072,7 @@ class InfoRow extends StatelessWidget {
       ),
     );
 
-    final result = demoMode
-        ? const ApiResult(true, 'Demo', <String, dynamic>{})
-        : await uploadFirmware(firmwareFile);
+    final result = await uploadFirmware(firmwareFile);
 
     if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -2173,9 +2143,7 @@ class InfoRow extends StatelessWidget {
   }
 
   Future<void> postCommand(String path) async {
-    final result = demoMode
-        ? const ApiResult(true, 'Demo', <String, dynamic>{})
-        : await postJson(path, const <String, dynamic>{});
+    final result = await postJson(path, const <String, dynamic>{});
     if (!mounted) return;
     note(result.ok ? 'Команда отправлена' : result.message);
   }
