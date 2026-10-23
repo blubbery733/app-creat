@@ -597,9 +597,15 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gta = games.firstWhere((g) => g.id == 105);
-    final installedGame = controller.lastInstalledGameId == null
-        ? null
-        : games.where((g) => g.id == controller.lastInstalledGameId).firstOrNull;
+    Game? installedGame;
+    if (controller.lastInstalledGameId != null) {
+      for (final game in games) {
+        if (game.id == controller.lastInstalledGameId) {
+          installedGame = game;
+          break;
+        }
+      }
+    }
 
     return Frame(
       ListView(
@@ -713,44 +719,58 @@ class StorePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gta = games.firstWhere((g) => g.id == 105);
+    final mp3d = games.firstWhere((g) => g.id == 106);
+    final newGames = [gta, mp3d];
+
     return Frame(
       ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 26),
         children: [
           const Row(children: [
             DecoratedBox(
-              decoration: BoxDecoration(color: C.blue, borderRadius: BorderRadius.all(Radius.circular(13))),
-              child: Padding(padding: EdgeInsets.all(11), child: Icon(Icons.shopping_bag_rounded, color: Colors.white, size: 25)),
+              decoration: BoxDecoration(
+                color: C.blue,
+                borderRadius: BorderRadius.all(Radius.circular(13)),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(11),
+                child: Icon(Icons.shopping_bag_rounded, color: Colors.white, size: 25),
+              ),
             ),
             SizedBox(width: 12),
             Text('PSR Store', style: TextStyle(fontSize: 29, fontWeight: FontWeight.w900)),
           ]),
-          const SizedBox(height: 22),
-          InkWell(
-            onTap: () => openGame(context, controller, gta),
-            child: Container(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.blue)),
-              child: Row(children: [
-                SizedBox(width: 105, height: 105, child: ClipRRect(borderRadius: BorderRadius.circular(15), child: GameArtwork(game: gta))),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4), decoration: BoxDecoration(color: C.blue, borderRadius: BorderRadius.circular(20)), child: const Text('Новинка', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
-                  const SizedBox(height: 8),
-                  Text(gta.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 5),
-                  const Text('36,50 ₴', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-                ])),
-              ]),
+          const SizedBox(height: 24),
+          const SectionTitle(icon: Icons.auto_awesome_rounded, title: 'Новинки'),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 195,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: newGames.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) {
+                final game = newGames[i];
+                return MiniCard(
+                  game: game,
+                  onTap: () => openGame(context, controller, game),
+                );
+              },
             ),
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 28),
           const SectionTitle(icon: Icons.apps_rounded, title: 'Все игры'),
           const SizedBox(height: 12),
-          ...games.map((game) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: GameTile(game: game, controller: controller, onTap: () => openGame(context, controller, game)),
-          )),
+          ...games.map(
+            (game) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: GameTile(
+                game: game,
+                controller: controller,
+                onTap: () => openGame(context, controller, game),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -881,6 +901,35 @@ class GamePage extends StatelessWidget {
     return (sec ~/ 60).toString() + ' мин ' + (sec % 60).toString() + ' сек';
   }
 
+  Future<void> removeGame(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: C.card,
+        title: const Text('Удалить приложение?'),
+        content: Text(game.name + ' будет удалено из библиотеки.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB33A3A),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await controller.uninstall(game);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -889,28 +938,65 @@ class GamePage extends StatelessWidget {
         final installed = controller.isInstalled(game.id);
         final installing = controller.isInstalling(game.id);
         final p = controller.progress[game.id] ?? 0;
+
         return Scaffold(
-          appBar: AppBar(backgroundColor: C.bg, foregroundColor: Colors.white, title: Text(game.name)),
+          appBar: AppBar(
+            backgroundColor: C.bg,
+            foregroundColor: Colors.white,
+            title: const Row(
+              children: [
+                Icon(Icons.shopping_bag_rounded, color: Colors.white),
+                SizedBox(width: 8),
+                Text('PSR Store', style: TextStyle(fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
           body: Frame(
             ListView(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 34),
               children: [
-                SizedBox(height: 280, child: ClipRRect(borderRadius: BorderRadius.circular(20), child: GameArtwork(game: game))),
+                SizedBox(
+                  height: 280,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: GameArtwork(game: game),
+                  ),
+                ),
                 const SizedBox(height: 18),
                 if (game.newRelease)
-                  Align(alignment: Alignment.centerLeft, child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(color: C.blue, borderRadius: BorderRadius.circular(20)),
-                    child: const Text('Новинка', style: TextStyle(fontWeight: FontWeight.w800)),
-                  )),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: C.blue,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Новинка',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
                 if (game.newRelease) const SizedBox(height: 9),
-                Text(game.name, style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w900)),
+                Text(
+                  game.name,
+                  style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 5),
                 Text(game.developer, style: const TextStyle(color: C.muted)),
-                if (game.rating.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(game.rating, style: const TextStyle(color: C.muted, fontSize: 12)),
-                ],
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    const InfoChip(icon: Icons.info_outline_rounded, text: 'Информация'),
+                    if (game.rating.isNotEmpty)
+                      InfoChip(icon: Icons.person_outline_rounded, text: game.rating),
+                    if (game.beta)
+                      const InfoChip(icon: Icons.science_rounded, text: 'Beta'),
+                  ],
+                ),
                 const SizedBox(height: 18),
                 Container(
                   padding: const EdgeInsets.all(15),
@@ -919,8 +1005,16 @@ class GamePage extends StatelessWidget {
                     Row(children: [
                       const Icon(Icons.sd_storage_rounded, color: Colors.white),
                       const SizedBox(width: 9),
-                      const Expanded(child: Text('Размер игры', style: TextStyle(fontWeight: FontWeight.w800))),
-                      Text(game.sizeMb.toString() + ' МБ', style: const TextStyle(fontWeight: FontWeight.w900)),
+                      const Expanded(
+                        child: Text(
+                          'Размер игры',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      Text(
+                        game.sizeMb.toString() + ' МБ',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ]),
                     const SizedBox(height: 11),
                     LinearProgressIndicator(
@@ -931,47 +1025,110 @@ class GamePage extends StatelessWidget {
                     ),
                   ]),
                 ),
-                const SizedBox(height: 18),
-                Text(game.description, style: const TextStyle(fontSize: 15, height: 1.5)),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 if (game.isPaid) ...[
-                  const Text('36,50 ₴', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  const Text(
+                    '36,50 ₴',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 52,
                     child: FilledButton(
-                      style: FilledButton.styleFrom(disabledBackgroundColor: Colors.white, disabledForegroundColor: Colors.black87),
+                      style: FilledButton.styleFrom(
+                        disabledBackgroundColor: Colors.white,
+                        disabledForegroundColor: Colors.black87,
+                      ),
                       onPressed: null,
-                      child: const Text('Функция оплаты пока недоступна', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text(
+                        'Функция оплаты пока недоступна',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                   ),
                 ] else if (installing) ...[
                   Row(children: [
-                    Expanded(child: Text('Установка ' + (p * 100).round().toString() + '%', style: const TextStyle(fontWeight: FontWeight.w900))),
-                    Text('Осталось ' + remaining(p), style: const TextStyle(color: C.muted)),
+                    Expanded(
+                      child: Text(
+                        'Установка ' + (p * 100).round().toString() + '%',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    Text(
+                      'Осталось ' + remaining(p),
+                      style: const TextStyle(color: C.muted),
+                    ),
                   ]),
                   const SizedBox(height: 9),
-                  LinearProgressIndicator(value: p, minHeight: 10, backgroundColor: C.card2, valueColor: const AlwaysStoppedAnimation<Color>(C.blue)),
-                ] else if (installed)
+                  LinearProgressIndicator(
+                    value: p,
+                    minHeight: 10,
+                    backgroundColor: C.card2,
+                    valueColor: const AlwaysStoppedAnimation<Color>(C.blue),
+                  ),
+                ] else if (installed) ...[
                   Container(
                     padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(color: C.accent.withOpacity(.22), borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(
+                      color: C.accent.withOpacity(.22),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: const Row(children: [
                       Icon(Icons.check_circle_rounded, color: Colors.white),
                       SizedBox(width: 9),
                       Text('Установлено', style: TextStyle(fontWeight: FontWeight.w900)),
                     ]),
-                  )
-                else
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF7777),
+                        side: const BorderSide(color: Color(0xFF7D3434)),
+                      ),
+                      onPressed: () => removeGame(context),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      label: const Text(
+                        'Удалить приложение',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ] else
                   SizedBox(
                     height: 52,
                     child: FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: C.accent, foregroundColor: Colors.white),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: C.accent,
+                        foregroundColor: Colors.white,
+                      ),
                       onPressed: () => controller.install(game),
                       icon: const Icon(Icons.download_rounded, color: Colors.white),
-                      label: const Text('Установить', style: TextStyle(fontWeight: FontWeight.w900)),
+                      label: const Text(
+                        'Установить',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                   ),
+                const SizedBox(height: 26),
+                const SectionTitle(
+                  icon: Icons.description_rounded,
+                  title: 'Описание игры',
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: C.card,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    game.description,
+                    style: const TextStyle(fontSize: 15, height: 1.5),
+                  ),
+                ),
               ],
             ),
           ),
@@ -997,7 +1154,11 @@ class GameArtwork extends StatelessWidget {
       color: C.card2,
       alignment: Alignment.center,
       padding: const EdgeInsets.all(14),
-      child: const Text('MP3D TEST', textAlign: TextAlign.center, style: TextStyle(color: C.muted, fontWeight: FontWeight.w900, fontSize: 20)),
+      child: const Text(
+        'MP3D TEST',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: C.muted, fontWeight: FontWeight.w900, fontSize: 20),
+      ),
     );
   }
 }
@@ -1061,7 +1222,7 @@ class InfoChip extends StatelessWidget {
       avatar: Icon(
         icon,
         size: 17,
-        color: C.accent,
+        color: Colors.white,
       ),
       label: Text(text),
       backgroundColor: C.card,
@@ -1451,7 +1612,7 @@ Future<void> showSettings(
     context: context,
     backgroundColor: C.card,
     showDragHandle: true,
-    builder: (context) => SafeArea(
+    builder: (sheetContext) => SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
@@ -1465,11 +1626,37 @@ Future<void> showSettings(
               Text('Настройки', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
             ]),
             const SizedBox(height: 20),
-            const _SettingInfo(icon: Icons.info_outline_rounded, title: 'Версия приложения', value: appVersionLabel),
+            const _SettingInfo(
+              icon: Icons.info_outline_rounded,
+              title: 'Версия приложения',
+              value: appVersionLabel,
+            ),
             const SizedBox(height: 10),
-            const _SettingInfo(icon: Icons.calendar_month_rounded, title: 'Полный релиз', value: fullReleaseDate),
-            const SizedBox(height: 10),
-            const _SettingInfo(icon: Icons.volume_up_rounded, title: 'Звук интерфейса', value: 'Только кнопка «Установить»'),
+            const _SettingInfo(
+              icon: Icons.calendar_month_rounded,
+              title: 'Полный релиз',
+              value: fullReleaseDate,
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF7777),
+                  side: const BorderSide(color: Color(0xFF7D3434)),
+                ),
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  controller.logout();
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text(
+                  'Выход — выйти из аккаунта',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1481,22 +1668,34 @@ class _SettingInfo extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
-  const _SettingInfo({required this.icon, required this.title, required this.value});
+  const _SettingInfo({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: C.card2, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: C.card2,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(children: [
         Icon(icon, color: Colors.white),
         const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 3),
-          Text(value, style: const TextStyle(color: C.muted, fontSize: 12.5)),
-        ])),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 3),
+              Text(value, style: const TextStyle(color: C.muted, fontSize: 12.5)),
+            ],
+          ),
+        ),
       ]),
     );
   }
