@@ -311,47 +311,81 @@ class ConnectPage extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  const Icon(Icons.sports_esports_rounded, size: 78, color: Colors.white),
+                  const SizedBox(height: 14),
                   const Text('PSR3', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 4),
-                  const Text('PlayStation 3 Remake', style: TextStyle(color: C.muted)),
-                  const SizedBox(height: 42),
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(22)),
+                  const SizedBox(height: 5),
+                  const Text('PlayStation 3 Remake', style: TextStyle(color: C.muted, fontSize: 16)),
+                  const SizedBox(height: 28),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
                     child: controller.connecting
-                        ? const Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.phone_android_rounded, color: Colors.white, size: 52),
-                                  SizedBox(width: 18),
-                                  ConnectingDots(),
-                                  SizedBox(width: 18),
-                                  Icon(Icons.sports_esports_rounded, color: Colors.white, size: 52),
-                                ],
-                              ),
-                              SizedBox(height: 22),
-                              Text('Подключение к PSR3…', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                              SizedBox(height: 6),
-                              Text('Около 4 секунд', style: TextStyle(color: C.muted)),
-                            ],
+                        ? Container(
+                            key: const ValueKey('connecting'),
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(22)),
+                            child: const Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.phone_android_rounded, color: Colors.white, size: 52),
+                                    SizedBox(width: 18),
+                                    ConnectingDots(),
+                                    SizedBox(width: 18),
+                                    Icon(Icons.sports_esports_rounded, color: Colors.white, size: 52),
+                                  ],
+                                ),
+                                SizedBox(height: 20),
+                                Text('Подключение к PSR3…', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                              ],
+                            ),
                           )
-                        : const Column(
-                            children: [
-                              Icon(Icons.phone_android_rounded, color: Colors.white, size: 62),
-                              SizedBox(height: 14),
-                              Text('Подключение через консоль', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-                              SizedBox(height: 6),
-                              Text('Телефон подключится к PSR3.', style: TextStyle(color: C.muted)),
-                            ],
+                        : Container(
+                            key: const ValueKey('login'),
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(20)),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    AvatarView(controller: controller, size: 54),
+                                    const SizedBox(width: 12),
+                                    const Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Максим Волошин', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                                          SizedBox(height: 3),
+                                          Text(profileNick, style: TextStyle(color: C.blue, fontSize: 12.5)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 18),
+                                const Divider(color: C.border, height: 1),
+                                const SizedBox(height: 16),
+                                const Row(
+                                  children: [
+                                    Icon(Icons.phone_android_rounded, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Вход в аккаунт и подключение через консоль',
+                                        style: TextStyle(fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                   ),
                   const SizedBox(height: 18),
@@ -362,8 +396,8 @@ class ConnectPage extends StatelessWidget {
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(backgroundColor: C.blue, foregroundColor: Colors.white),
                         onPressed: controller.connect,
-                        icon: const Icon(Icons.link_rounded, color: Colors.white),
-                        label: const Text('Подключиться через консоль', style: TextStyle(fontWeight: FontWeight.w900)),
+                        icon: const Icon(Icons.login_rounded, color: Colors.white),
+                        label: const Text('Войти и подключиться', style: TextStyle(fontWeight: FontWeight.w900)),
                       ),
                     ),
                 ],
@@ -399,9 +433,13 @@ class _ConnectingDotsState extends State<ConnectingDots> with SingleTickerProvid
         children: List.generate(5, (i) {
           final on = ((a.value * 5).floor() % 5) == i;
           return Container(
-            width: 8, height: 8,
+            width: 8,
+            height: 8,
             margin: const EdgeInsets.symmetric(horizontal: 3),
-            decoration: BoxDecoration(shape: BoxShape.circle, color: on ? C.blue : C.muted.withOpacity(.28)),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: on ? C.blue : C.muted.withOpacity(.28),
+            ),
           );
         }),
       ),
@@ -422,6 +460,9 @@ class _ShellState extends State<Shell> {
   int index = 0;
 
   void select(int value) {
+    if (index == 0 && value != 0) {
+      widget.controller.clearInstallNotice();
+    }
     setState(() => index = value);
   }
 
@@ -555,6 +596,11 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gta = games.firstWhere((g) => g.id == 105);
+    final installedGame = controller.lastInstalledGameId == null
+        ? null
+        : games.where((g) => g.id == controller.lastInstalledGameId).firstOrNull;
+
     return Frame(
       ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 26),
@@ -570,36 +616,79 @@ class HomePage extends StatelessWidget {
                 ]),
               ),
               Signal(controller: controller),
-              IconButton(onPressed: () => showSettings(context, controller), icon: const Icon(Icons.settings_rounded, color: Colors.white)),
+              IconButton(
+                onPressed: () => showSettings(context, controller),
+                icon: const Icon(Icons.settings_rounded, color: Colors.white),
+              ),
             ],
           ),
           const SizedBox(height: 26),
           const Text('Новинки', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 195,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: games.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (_, i) => MiniCard(game: games[i], onTap: () => openGame(context, controller, games[i])),
-            ),
-          ),
+          MiniCard(game: gta, onTap: () => openGame(context, controller, gta)),
           const SizedBox(height: 28),
-          const SectionTitle(icon: Icons.update_rounded, title: 'Обновления приложений'),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
-            child: const Row(children: [
-              Icon(Icons.description_rounded, color: Colors.white, size: 30),
-              SizedBox(width: 13),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Ничего нового', style: TextStyle(fontWeight: FontWeight.w900)),
-                SizedBox(height: 4),
-                Text('Новых приложений и обновлений пока нет.', style: TextStyle(color: C.muted)),
-              ])),
-            ]),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 380),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SizeTransition(sizeFactor: animation, child: child),
+            ),
+            child: installedGame != null
+                ? Column(
+                    key: ValueKey('installed-' + installedGame.id.toString()),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SectionTitle(icon: Icons.check_circle_rounded, title: 'Установленные приложения'),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 54,
+                              height: 54,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: GameArtwork(game: installedGame),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                installedGame.name + ' установлено',
+                                style: const TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                            const Icon(Icons.check_rounded, color: Colors.white),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    key: const ValueKey('updates'),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SectionTitle(icon: Icons.update_rounded, title: 'Обновления приложений'),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
+                        child: const Row(children: [
+                          Icon(Icons.close_rounded, color: Colors.white, size: 30),
+                          SizedBox(width: 13),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('Ничего нового', style: TextStyle(fontWeight: FontWeight.w900)),
+                            SizedBox(height: 4),
+                            Text('Новых приложений и обновлений пока нет.', style: TextStyle(color: C.muted)),
+                          ])),
+                        ]),
+                      ),
+                    ],
+                  ),
           ),
           const SizedBox(height: 28),
           const SectionTitle(icon: Icons.emoji_events_rounded, title: 'Трофеи, золотые и прогресс'),
