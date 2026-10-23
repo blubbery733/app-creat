@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,13 +14,18 @@ void main() {
 }
 
 class C {
-  static const bg = Color(0xFF0B0E14);
-  static const card = Color(0xFF1F232B);
-  static const card2 = Color(0xFF161A21);
-  static const accent = Color(0xFF18D26E);
-  static const blue = Color(0xFF0070D1);
-  static const muted = Color(0xFF8E939D);
+  static const bg = Color(0xFF0D0F12);
+  static const card = Color(0xFF191C21);
+  static const card2 = Color(0xFF12151A);
+  static const accent = Color(0xFF0B5D47);
+  static const blue = Color(0xFF2687FF);
+  static const muted = Color(0xFFA5ABB4);
+  static const border = Color(0xFF2A2F37);
 }
+
+const appVersionLabel = '0.4.0 Beta';
+const fullReleaseDate = '28 ноября 2026';
+const profileNick = '@Maksimka77nolka2';
 
 enum Stage { connect, blackout, ready }
 
@@ -32,6 +38,11 @@ class Game {
   final String description;
   final bool beta;
   final IconData icon;
+  final String? coverAsset;
+  final int sizeMb;
+  final String rating;
+  final double? priceUah;
+  final bool newRelease;
 
   const Game(
     this.id,
@@ -41,71 +52,42 @@ class Game {
     this.description,
     this.seconds,
     this.beta,
-    this.icon,
-  );
+    this.icon, {
+    this.coverAsset,
+    this.sizeMb = 64,
+    this.rating = '',
+    this.priceUah,
+    this.newRelease = false,
+  });
+
+  bool get isPaid => priceUah != null;
 }
 
 const games = <Game>[
-  Game(
-    1,
-    'MP3Dtest',
-    'ReGame LAB + Playstation Apsy',
-    'Minecraft Parkour 3D test game',
-    'Тестовая 3D-игра в стиле Minecraft. Проект создан для проверки паркура, управления и игровых возможностей PSR3.',
-    46,
-    true,
-    Icons.view_in_ar_rounded,
-  ),
-  Game(
-    2,
-    'Neon Track',
-    'ReGame LAB',
-    'Аркадные заезды в неоновом городе',
-    'Аркадная гоночная игра с короткими трассами и быстрыми перезапусками.',
-    60,
-    false,
-    Icons.sports_motorsports_rounded,
-  ),
-  Game(
-    3,
-    'Cube Runner',
-    'Playstation Apsy',
-    'Раннер с препятствиями',
-    'Быстрый раннер: проходи уровни, избегай препятствий и собирай игровые призы.',
-    90,
-    false,
-    Icons.crop_square_rounded,
-  ),
-  Game(
-    4,
-    'ReGame Arena',
-    'ReGame LAB',
-    'Мини-арена для быстрых матчей',
-    'Небольшая тестовая арена для коротких игровых сессий и проверки управления.',
-    120,
-    true,
-    Icons.sports_esports_rounded,
-  ),
-  Game(
-    5,
-    'Sky Lines Beta',
-    'ReGame LAB',
-    'Полёт между платформами',
-    'Экспериментальная игра с воздушными трассами и тестовыми испытаниями.',
-    180,
-    true,
-    Icons.flight_takeoff_rounded,
-  ),
-  Game(
-    6,
-    'Pixel Drift',
-    'Playstation Apsy',
-    'Пиксельная аркада на время',
-    'Лёгкая аркада с короткими заездами на время для библиотеки PSR3.',
-    300,
-    false,
-    Icons.speed_rounded,
-  ),
+  Game(101, 'Fortnite Online', 'PupgMasterBP + ReGame LAB', '14+ • Beta',
+      'Fortnite — это бесплатная и постоянно развивающаяся многопользовательская игра, которая объединяет в себе целую вселенную уникальных развлечений.',
+      150, true, Icons.sports_esports_rounded,
+      coverAsset: 'assets/covers/fortnite.svg', sizeMb: 248, rating: '14+'),
+  Game(102, 'CREATURE', 'ReGame', '15+ • Психологический хоррор',
+      'Creature — это леденящий душу психологический хоррор-квест, который проверит вашу выдержку и умение выживать в условиях абсолютной изоляции.\n\nАтмосферный психологический хоррор: визуальный стиль и звуковое сопровождение полностью погружают в виртуальный мир.\n\nТактический геймплей и выживание: управляйте ресурсами, скрывайтесь от преследования и принимайте решения за считанные секунды.\n\nИнтригующие головоломки: изучайте собранные страницы, ищите скрытые ключи и механизмы, чтобы продвигаться вглубь сюжета.',
+      180, false, Icons.flashlight_on_rounded,
+      coverAsset: 'assets/covers/creature.svg', sizeMb: 176, rating: '15+'),
+  Game(103, 'Minecraft Beta 2D', 'ReGame Studio', '7+ • Beta 2D',
+      'Minecraft для PlayStation 3 Remake — это симулятор выживания и песочница, где весь мир состоит из блоков, а единственным ограничением является ваша фантазия.',
+      70, true, Icons.grid_view_rounded,
+      coverAsset: 'assets/covers/minecraft_beta.svg', sizeMb: 88, rating: '7+'),
+  Game(104, 'Terraria', 'ReStation Studio (ReGame LAS)', '12+ • Приключение',
+      'Terraria для PlayStation 3 Remake — это уникальное приключение, которое объединяет классические черты экшен-игр со свободой творчества, доступной только в «песочницах». Весь мир игры находится на кончиках ваших пальцев, пока вы сражаетесь за выживание, исследуете недра в поисках богатств или строите собственные города.',
+      195, false, Icons.terrain_rounded,
+      coverAsset: 'assets/covers/terraria.svg', sizeMb: 132, rating: '12+'),
+  Game(105, 'GTA beta Digital', 'ReGame Studio • 2025', '18+ • Beta Digital',
+      'Это двумерная песочница (2D Top-Down Shooter / Driving) с видом сверху, вдохновлённая классическими частями Grand Theft Auto. Игрок попадает в небольшой открытый город, состоящий из пиксельных блоков или векторных рисунков.',
+      0, true, Icons.directions_car_rounded,
+      coverAsset: 'assets/covers/gta_beta.svg', sizeMb: 310, rating: '18+', priceUah: 36.50, newRelease: true),
+  Game(106, 'MP3D Test', 'Android App', 'Minecraft Parkour 3D test game',
+      'Тот самый тестовый паркур PSR3. Небольшая Android-игра для проверки управления, прыжков и игровых возможностей проекта.',
+      50, true, Icons.crop_square_rounded,
+      coverAsset: null, sizeMb: 41),
 ];
 
 class PSR3Controller extends ChangeNotifier {
@@ -115,51 +97,50 @@ class PSR3Controller extends ChangeNotifier {
   String esp = 'http://192.168.4.1';
   String? error;
   String? avatarPath;
-  final installed = <int>{2, 3, 4, 5};
+  int signalBars = 3;
+
+  final installed = <int>{106};
   final progress = <int, double>{};
   final timers = <int, Timer>{};
-
   final AudioPlayer audio = AudioPlayer();
   final ImagePicker picker = ImagePicker();
 
-  PSR3Controller() {
-    unawaited(loadSavedState());
-  }
+  PSR3Controller() { unawaited(loadSavedState()); }
 
   bool isInstalled(int id) => installed.contains(id);
   bool isInstalling(int id) => progress.containsKey(id);
 
+  Color get signalColor {
+    if (signalBars <= 1) return const Color(0xFFE64C4C);
+    if (signalBars == 2) return const Color(0xFFD59A2D);
+    if (signalBars == 3) return C.accent;
+    return C.blue;
+  }
+
+  int get installedFreeCount => games.where((g) => !g.isPaid && installed.contains(g.id)).length;
+  int get freeGamesCount => games.where((g) => !g.isPaid).length;
+  int get trophyCount => installedFreeCount;
+  int get goldCount => installedFreeCount ~/ 3;
+  double get collectionProgress => freeGamesCount == 0 ? 0 : installedFreeCount / freeGamesCount;
+  int get installedSizeMb => games.where((g) => installed.contains(g.id)).fold(0, (sum, g) => sum + g.sizeMb);
+
   Future<void> loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedGames = prefs.getStringList('installed_game_ids');
+    final savedGames = prefs.getStringList('installed_game_ids_v4');
     final savedAvatar = prefs.getString('avatar_path');
-
     if (savedGames != null) {
       installed
         ..clear()
         ..addAll(savedGames.map(int.tryParse).whereType<int>());
+      if (installed.isEmpty) installed.add(106);
     }
-
-    if (savedAvatar != null && File(savedAvatar).existsSync()) {
-      avatarPath = savedAvatar;
-    }
-
+    if (savedAvatar != null && File(savedAvatar).existsSync()) avatarPath = savedAvatar;
     notifyListeners();
   }
 
   Future<void> saveInstalled() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      'installed_game_ids',
-      installed.map((id) => id.toString()).toList(),
-    );
-  }
-
-  Future<void> playSound(String file) async {
-    try {
-      await audio.stop();
-      await audio.play(AssetSource('audio/' + file));
-    } catch (_) {}
+    await prefs.setStringList('installed_game_ids_v4', installed.map((id) => id.toString()).toList());
   }
 
   Future<void> connect() async {
@@ -167,181 +148,54 @@ class PSR3Controller extends ChangeNotifier {
     connecting = true;
     error = null;
     notifyListeners();
-
-    bool ok;
-    if (mock) {
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      ok = true;
-    } else {
-      ok = await ping();
-    }
-
+    await Future<void>.delayed(const Duration(seconds: 4));
     connecting = false;
-
-    if (!ok) {
-      error = 'Не удалось подключиться к ESP32: ' + esp;
-      await playSound('error.mp3');
-      notifyListeners();
-      return;
-    }
-
-    await playSound('notification.mp3');
-    stage = Stage.blackout;
-    notifyListeners();
-
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
-
     stage = Stage.ready;
+    signalBars = 3;
     notifyListeners();
-  }
-
-  Future<bool> ping() async {
-    HttpClient? client;
-    try {
-      client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
-      final req = await client.getUrl(Uri.parse(esp + '/status'));
-      final res = await req.close().timeout(const Duration(seconds: 3));
-      await res.drain<void>();
-      return res.statusCode >= 200 && res.statusCode < 500;
-    } catch (_) {
-      return false;
-    } finally {
-      client?.close(force: true);
-    }
-  }
-
-  Future<bool> sendGameId(Game game) async {
-    if (mock) {
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      return true;
-    }
-
-    HttpClient? client;
-
-    try {
-      client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
-
-      final uri = Uri.parse(esp + '/game').replace(
-        queryParameters: {
-          'id': game.id.toString(),
-          'name': game.name,
-        },
-      );
-
-      final req = await client.postUrl(uri);
-      req.headers.contentType = ContentType.json;
-      req.write(
-        '{"gameId":' +
-            game.id.toString() +
-            ',"gameName":"' +
-            game.name +
-            '"}',
-      );
-
-      final res = await req.close().timeout(const Duration(seconds: 4));
-      await res.drain<void>();
-
-      return res.statusCode >= 200 && res.statusCode < 300;
-    } catch (_) {
-      return false;
-    } finally {
-      client?.close(force: true);
-    }
   }
 
   Future<bool> install(Game game) async {
-    if (isInstalled(game.id) || isInstalling(game.id)) return true;
-
-    final accepted = await sendGameId(game);
-
-    if (!accepted) {
-      await playSound('error.mp3');
-      return false;
-    }
-
-    await playSound('install.mp3');
-
+    if (game.isPaid || isInstalled(game.id) || isInstalling(game.id)) return false;
+    try {
+      await audio.stop();
+      await audio.play(AssetSource('audio/install.mp3'));
+    } catch (_) {}
     progress[game.id] = 0;
     notifyListeners();
-
     var elapsed = 0;
     final total = game.seconds * 1000;
-
-    timers[game.id] = Timer.periodic(
-      const Duration(milliseconds: 250),
-      (timer) async {
-        elapsed += 250;
-        final value = (elapsed / total).clamp(0.0, 1.0);
-        progress[game.id] = value;
-
-        if (value >= 1) {
-          timer.cancel();
-          timers.remove(game.id);
-          progress.remove(game.id);
-          installed.add(game.id);
-          await saveInstalled();
-          await playSound('notification.mp3');
-        }
-
-        notifyListeners();
-      },
-    );
-
+    timers[game.id] = Timer.periodic(const Duration(milliseconds: 250), (timer) async {
+      elapsed += 250;
+      final value = (elapsed / total).clamp(0.0, 1.0);
+      progress[game.id] = value;
+      if (value >= 1) {
+        timer.cancel();
+        timers.remove(game.id);
+        progress.remove(game.id);
+        installed.add(game.id);
+        await saveInstalled();
+      }
+      notifyListeners();
+    });
     return true;
   }
 
   Future<void> pickAvatar() async {
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 88,
-      maxWidth: 1200,
-      maxHeight: 1200,
-    );
-
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 88, maxWidth: 1200, maxHeight: 1200);
     if (picked == null) return;
-
     final dir = await getApplicationDocumentsDirectory();
     final target = dir.path + '/psr3_avatar.jpg';
-
     await File(picked.path).copy(target);
-
     avatarPath = target;
-
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('avatar_path', target);
-
-    notifyListeners();
-    await playSound('notification.mp3');
-  }
-
-  void setMock(bool value) {
-    mock = value;
-    notifyListeners();
-  }
-
-  void setEsp(String value) {
-    var normalized = value.trim();
-
-    if (normalized.isEmpty) return;
-
-    if (!normalized.startsWith('http://') &&
-        !normalized.startsWith('https://')) {
-      normalized = 'http://' + normalized;
-    }
-
-    if (normalized.endsWith('/')) {
-      normalized = normalized.substring(0, normalized.length - 1);
-    }
-
-    esp = normalized;
     notifyListeners();
   }
 
   @override
   void dispose() {
-    for (final timer in timers.values) {
-      timer.cancel();
-    }
+    for (final timer in timers.values) { timer.cancel(); }
     unawaited(audio.dispose());
     super.dispose();
   }
