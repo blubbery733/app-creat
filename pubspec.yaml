@@ -1,5 +1,5 @@
 name: psr3_app
-description: PSR3 companion app for Windows
+description: PSR3 Android application
 publish_to: "none"
 version: 0.1.0+1
 
@@ -10,8 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   audioplayers: ^6.8.1
-  file_picker: ^11.0.3
   flutter_svg: ^2.3.0
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -21,9 +21,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/psremake-logo.png
-    - assets/startup-controller.webp
-    - assets/remote-loading.webp
     - assets/covers/
     - assets/audio/
   fonts:
