@@ -1,7 +1,7 @@
 name: psr3_app
-description: PSR3 Android application
+description: PSR3 Windows companion application
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -9,9 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  audioplayers: ^6.8.1
-  flutter_svg: ^2.3.0
-  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -20,11 +17,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/covers/
-    - assets/audio/
-  fonts:
-    - family: ZenMaru
-      fonts:
-        - asset: assets/fonts/ZenMaruGothicLight.ttf
-          weight: 300
