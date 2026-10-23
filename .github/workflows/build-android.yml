@@ -41,6 +41,7 @@ jobs:
             flutter create --platforms=android .
           fi
           sed -i 's/android:label="psr3_app"/android:label="PSR3"/' android/app/src/main/AndroidManifest.xml
+          rm -f test/widget_test.dart
 
       - name: Get packages
         run: flutter pub get
