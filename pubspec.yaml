@@ -1,7 +1,7 @@
 name: psr3_app
 description: PSR3 Android companion application
 publish_to: "none"
-version: 0.3.0+3
+version: 0.4.0-beta.1+4
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   audioplayers: ^6.5.0
+  flutter_svg: ^2.2.1
   image_picker: ^1.1.2
   path_provider: ^2.1.5
   shared_preferences: ^2.5.3
@@ -23,3 +24,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/audio/
+    - assets/covers/
