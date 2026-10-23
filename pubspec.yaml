@@ -1,7 +1,7 @@
 name: psr3_app
 description: PSR3 Android companion application
 publish_to: "none"
-version: 0.4.1-beta.1+5
+version: 0.4.2-beta.1+6
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
