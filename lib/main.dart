@@ -27,6 +27,28 @@ const appVersionLabel = '0.4.2 Beta';
 const fullReleaseDate = '28 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 
+Color usageColor(double value) {
+  if (value < 0.35) return const Color(0xFF2E9B67);
+  if (value < 0.70) return const Color(0xFFE0A52B);
+  return const Color(0xFFD9534F);
+}
+
+Widget roundedProgress({
+  required double value,
+  required Color color,
+  double height = 10,
+}) {
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(999),
+    child: LinearProgressIndicator(
+      value: value.clamp(0.0, 1.0),
+      minHeight: height,
+      backgroundColor: C.card2,
+      valueColor: AlwaysStoppedAnimation<Color>(color),
+    ),
+  );
+}
+
 enum Stage { connect, blackout, ready }
 
 class Game {
@@ -830,7 +852,7 @@ class HomePage extends StatelessWidget {
           const SizedBox(height: 26),
           const Text('Новинки', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
-          MiniCard(game: gta, onTap: () => openGame(context, controller, gta)),
+          HeroCard(game: gta, onTap: () => openGame(context, controller, gta)),
           const SizedBox(height: 28),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 380),
@@ -1063,11 +1085,10 @@ class ProfilePage extends StatelessWidget {
                 Text('Размер игр', style: TextStyle(fontWeight: FontWeight.w900)),
               ]),
               const SizedBox(height: 12),
-              LinearProgressIndicator(
+              roundedProgress(
                 value: (used / total).clamp(0.0, 1.0),
-                minHeight: 9,
-                backgroundColor: C.card2,
-                valueColor: const AlwaysStoppedAnimation<Color>(C.blue),
+                color: usageColor((used / total).clamp(0.0, 1.0)),
+                height: 10,
               ),
               const SizedBox(height: 8),
               Text(used.toString() + ' МБ занято • ' + (total - used).toString() + ' МБ свободно', style: const TextStyle(color: C.muted, fontSize: 12)),
@@ -1136,7 +1157,9 @@ class GamePage extends StatelessWidget {
       builder: (_, __) {
         final installed = controller.isInstalled(game.id);
         final installing = controller.isInstalling(game.id);
+        final removing = controller.isRemoving(game.id);
         final p = controller.progress[game.id] ?? 0;
+        final rp = controller.removalProgress[game.id] ?? 0;
 
         return Scaffold(
           appBar: AppBar(
@@ -1194,6 +1217,8 @@ class GamePage extends StatelessWidget {
                       InfoChip(icon: Icons.person_outline_rounded, text: game.rating),
                     if (game.beta)
                       const InfoChip(icon: Icons.science_rounded, text: 'Beta'),
+                    if (game.dimension.isNotEmpty)
+                      InfoChip(icon: Icons.view_in_ar_rounded, text: game.dimension),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -1216,11 +1241,10 @@ class GamePage extends StatelessWidget {
                       ),
                     ]),
                     const SizedBox(height: 11),
-                    LinearProgressIndicator(
+                    roundedProgress(
                       value: (game.sizeMb / 350).clamp(0.0, 1.0),
-                      minHeight: 8,
-                      backgroundColor: C.card2,
-                      valueColor: const AlwaysStoppedAnimation<Color>(C.blue),
+                      color: usageColor((game.sizeMb / 350).clamp(0.0, 1.0)),
+                      height: 9,
                     ),
                   ]),
                 ),
@@ -1247,24 +1271,26 @@ class GamePage extends StatelessWidget {
                     ),
                   ),
                 ] else if (installing) ...[
-                  Row(children: [
-                    Expanded(
-                      child: Text(
-                        'Установка ' + (p * 100).round().toString() + '%',
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                    Text(
-                      'Осталось ' + remaining(p),
-                      style: const TextStyle(color: C.muted),
-                    ),
-                  ]),
+                  Text(
+                    'Установка ' + (p * 100).round().toString() + '%',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(height: 9),
-                  LinearProgressIndicator(
+                  roundedProgress(
                     value: p,
-                    minHeight: 10,
-                    backgroundColor: C.card2,
-                    valueColor: const AlwaysStoppedAnimation<Color>(C.blue),
+                    color: Colors.white,
+                    height: 10,
+                  ),
+                ] else if (removing) ...[
+                  Text(
+                    'Удаление ' + (rp * 100).round().toString() + '%',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 9),
+                  roundedProgress(
+                    value: rp,
+                    color: Colors.white,
+                    height: 10,
                   ),
                 ] else if (installed) ...[
                   Container(
@@ -1353,10 +1379,10 @@ class GameArtwork extends StatelessWidget {
       color: C.card2,
       alignment: Alignment.center,
       padding: const EdgeInsets.all(14),
-      child: const Text(
-        'MP3D TEST',
-        textAlign: TextAlign.center,
-        style: TextStyle(color: C.muted, fontWeight: FontWeight.w900, fontSize: 20),
+      child: Icon(
+        game.icon,
+        size: 72,
+        color: Colors.white,
       ),
     );
   }
@@ -1851,7 +1877,7 @@ Future<void> showSettings(
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text(
-                  'Выход — выйти из аккаунта',
+                  'Выйти из аккаунта',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
