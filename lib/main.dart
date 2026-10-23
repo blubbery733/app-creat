@@ -449,17 +449,17 @@ class SquareBottomBar extends StatelessWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: active ? C.accent : C.card,
+                            color: active ? C.blue.withOpacity(.18) : Colors.transparent,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: active
-                                  ? C.accent
+                                  ? C.blue.withOpacity(.30)
                                   : Colors.white.withOpacity(.05),
                             ),
                           ),
                           child: Icon(
                             item.$1,
-                            color: active ? Colors.black : C.muted,
+                            color: Colors.white,
                           ),
                         ),
                         const SizedBox(height: 5),
@@ -887,7 +887,7 @@ class SectionTitle extends StatelessWidget {
       children: [
         Icon(
           icon,
-          color: C.accent,
+          color: Colors.white,
           size: 23,
         ),
         const SizedBox(width: 8),
@@ -1226,19 +1226,15 @@ class AvatarView extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [
-            C.accent,
-            Color(0xFF0E8F4A),
-          ],
-        ),
+        color: C.card,
+        border: Border.all(color: C.border),
       ),
       child: Icon(
         Icons.person_rounded,
         size: size * .56,
-        color: Colors.black,
+        color: Colors.white,
       ),
     );
   }
