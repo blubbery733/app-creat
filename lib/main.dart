@@ -23,8 +23,8 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.2 Beta';
-const fullReleaseDate = '28 ноября 2026';
+const appVersionLabel = '0.4.3 Beta';
+const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 
 Color usageColor(double value) {
@@ -64,6 +64,10 @@ class Game {
   final int sizeMb;
   final String rating;
   final String dimension;
+  final String downloadRange;
+  final bool inDevelopment;
+  final bool remotePlay;
+  final bool dolbyAtmos;
   final double? priceUah;
   final bool newRelease;
 
@@ -80,6 +84,10 @@ class Game {
     this.sizeMb = 64,
     this.rating = '',
     this.dimension = '',
+    this.downloadRange = '',
+    this.inDevelopment = false,
+    this.remotePlay = false,
+    this.dolbyAtmos = false,
     this.priceUah,
     this.newRelease = false,
   });
@@ -89,9 +97,9 @@ class Game {
 
 const games = <Game>[
   Game(101, 'Fortnite Online', 'PupgMasterBP + ReGame LAB', '14+ • Beta',
-      'Fortnite — это бесплатная и постоянно развивающаяся многопользовательская игра, которая объединяет в себе целую вселенную уникальных развлечений.',
+      'Fortnite — это бесплатная и постоянно развивающаяся многопользовательская игра, которая объединяет в себе целую вселенную уникальных развлечений. Шутер',
       150, true, Icons.sports_esports_rounded,
-      coverAsset: 'assets/covers/fortnite.svg', sizeMb: 248, rating: '14+', dimension: '3D'),
+      coverAsset: 'assets/covers/fortnite.svg', sizeMb: 248, rating: '14+', dimension: '2D'),
   Game(102, 'CREATURE', 'ReGame', '15+ • Психологический хоррор',
       'Creature — это леденящий душу психологический хоррор-квест, который проверит вашу выдержку и умение выживать в условиях абсолютной изоляции.\n\nАтмосферный психологический хоррор: визуальный стиль и звуковое сопровождение полностью погружают в виртуальный мир.\n\nТактический геймплей и выживание: управляйте ресурсами, скрывайтесь от преследования и принимайте решения за считанные секунды.\n\nИнтригующие головоломки: изучайте собранные страницы, ищите скрытые ключи и механизмы, чтобы продвигаться вглубь сюжета.',
       180, false, Icons.flashlight_on_rounded,
@@ -108,10 +116,29 @@ const games = <Game>[
       'Это двумерная песочница (2D Top-Down Shooter / Driving) с видом сверху, вдохновлённая классическими частями Grand Theft Auto. Игрок попадает в небольшой открытый город, состоящий из пиксельных блоков или векторных рисунков.',
       0, true, Icons.directions_car_rounded,
       coverAsset: 'assets/covers/gta_beta.svg', sizeMb: 310, rating: '18+', dimension: '2D', priceUah: 36.50, newRelease: true),
-  Game(106, 'MP3D Test', 'IdevStuff + ReGame Lab', '7+ • Beta • 3D',
-      'Тест игра Майнкрафт Паркур для теста 3D графики, похоже Idev что-то для нас готовит.',
+  Game(106, 'IdeaStuff 3D', 'IdevStuff + ReGame Lab', '7+ • Beta • 3D',
+      'Это тестовая игра паркур в 3д.',
       50, true, Icons.crop_square_rounded,
       coverAsset: null, sizeMb: 41, rating: '7+', dimension: '3D'),
+  Game(
+    107,
+    'The BackSeat',
+    'VLDM + ReStudio',
+    '13+ • 3D/2D • В разработке',
+    'Игра находится в разработке.',
+    240,
+    false,
+    Icons.event_seat_rounded,
+    coverAsset: null,
+    sizeMb: 427,
+    rating: '13+',
+    dimension: '3D/2D',
+    downloadRange: '3–5 минут',
+    inDevelopment: true,
+    remotePlay: true,
+    dolbyAtmos: true,
+    priceUah: 38.00,
+  ),
 ];
 
 class PSR3Controller extends ChangeNotifier {
@@ -125,7 +152,7 @@ class PSR3Controller extends ChangeNotifier {
   int signalBars = 3;
   int? lastInstalledGameId;
 
-  final installed = <int>{106};
+  final installed = <int>{};
   final progress = <int, double>{};
   final removalProgress = <int, double>{};
   final timers = <int, Timer>{};
@@ -606,7 +633,7 @@ class ConnectPage extends StatelessWidget {
                           color: Colors.black,
                         ),
                         label: const Text(
-                          'Войти через консоль',
+                          'Войти',
                           style: TextStyle(fontWeight: FontWeight.w900),
                         ),
                       ),
