@@ -373,6 +373,10 @@ class _PSR3AppState extends State<PSR3App> {
       home: AnimatedBuilder(
         animation: controller,
         builder: (_, __) {
+          if (!controller.stateLoaded) {
+            return const ColoredBox(color: C.bg);
+          }
+
           if (controller.stage == Stage.blackout) {
             return const ColoredBox(color: Colors.black);
           }
@@ -394,6 +398,8 @@ class ConnectPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final firstLaunch = !controller.hasEverLoggedIn;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -403,76 +409,164 @@ class ConnectPage extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 520),
               child: Column(
                 children: [
-                  const Icon(Icons.sports_esports_rounded, size: 78, color: Colors.white),
+                  const Icon(
+                    Icons.sports_esports_rounded,
+                    size: 78,
+                    color: Colors.white,
+                  ),
                   const SizedBox(height: 14),
-                  const Text('PSR3', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900)),
+                  const Text(
+                    'PSR3',
+                    style: TextStyle(
+                      fontSize: 42,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(height: 5),
-                  const Text('PlayStation 3 Remake', style: TextStyle(color: C.muted, fontSize: 16)),
-                  const SizedBox(height: 28),
+                  const Text(
+                    'PlayStation 3 Remake',
+                    style: TextStyle(
+                      color: C.muted,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 280),
                     child: controller.connecting
                         ? Container(
                             key: const ValueKey('connecting'),
                             padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(22)),
+                            decoration: BoxDecoration(
+                              color: C.card,
+                              borderRadius: BorderRadius.circular(22),
+                            ),
                             child: const Column(
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.phone_android_rounded, color: Colors.white, size: 52),
+                                    Icon(
+                                      Icons.phone_android_rounded,
+                                      color: Colors.white,
+                                      size: 52,
+                                    ),
                                     SizedBox(width: 18),
                                     ConnectingDots(),
                                     SizedBox(width: 18),
-                                    Icon(Icons.sports_esports_rounded, color: Colors.white, size: 52),
+                                    Icon(
+                                      Icons.sports_esports_rounded,
+                                      color: Colors.white,
+                                      size: 52,
+                                    ),
                                   ],
                                 ),
                                 SizedBox(height: 20),
-                                Text('Подключение к PSR3…', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                                Text(
+                                  'Подключение к PSR3…',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
                               ],
                             ),
                           )
-                        : Container(
-                            key: const ValueKey('login'),
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(20)),
-                            child: Column(
-                              children: [
-                                Row(
+                        : firstLaunch
+                            ? Container(
+                                key: const ValueKey('first-launch'),
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(22),
+                                decoration: BoxDecoration(
+                                  color: C.card,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Column(
                                   children: [
-                                    AvatarView(controller: controller, size: 54),
-                                    const SizedBox(width: 12),
-                                    const Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('Максим Волошин', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-                                          SizedBox(height: 3),
-                                          Text(profileNick, style: TextStyle(color: C.blue, fontSize: 12.5)),
-                                        ],
+                                    Icon(
+                                      Icons.wifi_rounded,
+                                      color: Colors.white,
+                                      size: 40,
+                                    ),
+                                    SizedBox(height: 13),
+                                    Text(
+                                      'Подключитесь к сети PSR3',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 19,
+                                        fontWeight: FontWeight.w900,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 18),
-                                const Divider(color: C.border, height: 1),
-                                const SizedBox(height: 16),
-                                const Row(
+                              )
+                            : Container(
+                                key: const ValueKey('logged-out'),
+                                padding: const EdgeInsets.all(18),
+                                decoration: BoxDecoration(
+                                  color: C.card,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Column(
                                   children: [
-                                    Icon(Icons.phone_android_rounded, color: Colors.white),
-                                    SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        'Вход в аккаунт и подключение через консоль',
-                                        style: TextStyle(fontWeight: FontWeight.w800),
-                                      ),
+                                    Row(
+                                      children: [
+                                        AvatarView(
+                                          controller: controller,
+                                          size: 54,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        const Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Максим Волошин',
+                                                style: TextStyle(
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              SizedBox(height: 3),
+                                              Text(
+                                                profileNick,
+                                                style: TextStyle(
+                                                  color: C.blue,
+                                                  fontSize: 12.5,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 18),
+                                    const Divider(
+                                      color: C.border,
+                                      height: 1,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.login_rounded,
+                                          color: Colors.white,
+                                        ),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'Вход в аккаунт и подключение через консоль',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
                   ),
                   const SizedBox(height: 18),
                   if (!controller.connecting)
@@ -480,10 +574,19 @@ class ConnectPage extends StatelessWidget {
                       width: double.infinity,
                       height: 52,
                       child: FilledButton.icon(
-                        style: FilledButton.styleFrom(backgroundColor: C.blue, foregroundColor: Colors.white),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                        ),
                         onPressed: controller.connect,
-                        icon: const Icon(Icons.login_rounded, color: Colors.white),
-                        label: const Text('Войти и подключиться', style: TextStyle(fontWeight: FontWeight.w900)),
+                        icon: const Icon(
+                          Icons.login_rounded,
+                          color: Colors.black,
+                        ),
+                        label: const Text(
+                          'Войти через консоль',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
                       ),
                     ),
                 ],
@@ -502,15 +605,25 @@ class ConnectingDots extends StatefulWidget {
   State<ConnectingDots> createState() => _ConnectingDotsState();
 }
 
-class _ConnectingDotsState extends State<ConnectingDots> with SingleTickerProviderStateMixin {
+class _ConnectingDotsState extends State<ConnectingDots>
+    with SingleTickerProviderStateMixin {
   late final AnimationController a;
+
   @override
   void initState() {
     super.initState();
-    a = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat();
+    a = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat();
   }
+
   @override
-  void dispose() { a.dispose(); super.dispose(); }
+  void dispose() {
+    a.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
