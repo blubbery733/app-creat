@@ -1604,7 +1604,7 @@ class Feature extends StatelessWidget {
             ),
             child: Icon(
               icon,
-              color: C.accent,
+              color: Colors.white,
             ),
           ),
           const SizedBox(width: 14),
@@ -1804,8 +1804,24 @@ class GameTile extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     )
+                  else if (game.inDevelopment)
+                    Text(
+                      'В разработке • ' + priceLabel(game),
+                      style: const TextStyle(
+                        color: C.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
                   else
-                    Text(priceLabel(game), style: const TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                    Text(
+                      priceLabel(game),
+                      style: const TextStyle(
+                        color: C.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                 ],
               ),
             ),
