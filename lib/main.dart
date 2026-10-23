@@ -1115,12 +1115,6 @@ class GamePage extends StatelessWidget {
   final Game game;
   const GamePage({super.key, required this.controller, required this.game});
 
-  String remaining(double p) {
-    final sec = (game.seconds * (1 - p)).ceil();
-    if (sec < 60) return sec.toString() + ' сек';
-    return (sec ~/ 60).toString() + ' мин ' + (sec % 60).toString() + ' сек';
-  }
-
   Future<void> removeGame(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -1555,74 +1549,73 @@ class HeroCard extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
+      child: SizedBox(
         height: 235,
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
+        child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF344A64),
-              Color(0xFF17293F),
-              Color(0xFF08111C),
-            ],
-          ),
-        ),
-        child: Stack(
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: Icon(
-                game.icon,
-                size: 145,
-                color: Colors.white.withOpacity(.13),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              GameArtwork(game: game),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(.08),
+                      Colors.black.withOpacity(.78),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
+              Padding(
+                padding: const EdgeInsets.all(22),
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.new_releases_rounded,
-                        size: 17,
-                        color: Colors.white,
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.new_releases_rounded,
+                            size: 17,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'НОВИНКА',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(width: 6),
+                      const SizedBox(height: 8),
                       Text(
-                        'НОВИНКА',
-                        style: TextStyle(
-                          fontSize: 12,
+                        game.name,
+                        style: const TextStyle(
+                          fontSize: 31,
                           fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        game.subtitle,
+                        style: const TextStyle(
+                          color: Color(0xFFD1D5DB),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    game.name,
-                    style: const TextStyle(
-                      fontSize: 31,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    game.subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFFD1D5DB),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1672,11 +1665,9 @@ class GameTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final installed = controller.isInstalled(game.id);
     final installing = controller.isInstalling(game.id);
+    final removing = controller.isRemoving(game.id);
     final p = controller.progress[game.id] ?? 0;
-    final remain = (game.seconds * (1 - p)).ceil();
-    final remainText = remain < 60
-        ? remain.toString() + ' сек'
-        : (remain ~/ 60).toString() + ' мин ' + (remain % 60).toString() + ' сек';
+    final rp = controller.removalProgress[game.id] ?? 0;
 
     return InkWell(
       onTap: onTap,
@@ -1701,9 +1692,32 @@ class GameTile extends StatelessWidget {
                   Text(game.developer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.muted, fontSize: 12)),
                   const SizedBox(height: 7),
                   if (installing)
-                    Text('Установка ' + (p * 100).round().toString() + '% • осталось ' + remainText, style: const TextStyle(color: C.blue, fontSize: 11.5, fontWeight: FontWeight.w700))
+                    Text(
+                      'Установка ' + (p * 100).round().toString() + '%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
+                  else if (removing)
+                    Text(
+                      'Удаление ' + (rp * 100).round().toString() + '%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
                   else if (installed)
-                    const Text('Установлено', style: TextStyle(color: C.accent, fontSize: 12, fontWeight: FontWeight.w800))
+                    const Text(
+                      'Установлено',
+                      style: TextStyle(
+                        color: C.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    )
                   else
                     Text(game.isPaid ? '36,50 ₴' : 'Бесплатно', style: const TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w700)),
                 ],
