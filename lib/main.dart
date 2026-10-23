@@ -258,109 +258,106 @@ class _PSR3AppState extends State<PSR3App> {
 
 class ConnectPage extends StatelessWidget {
   final PSR3Controller controller;
-
   const ConnectPage({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.sports_esports_rounded,
-                  size: 82,
-                  color: C.accent,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'PSR3',
-                  style: TextStyle(
-                    fontSize: 42,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Playstation 3 Remale',
-                  style: TextStyle(
-                    color: C.muted,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: C.card,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.router_rounded,
-                        color: C.accent,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          controller.mock
-                              ? 'Mock Mode — ESP32 не требуется'
-                              : controller.esp,
-                        ),
-                      ),
-                      Switch(
-                        value: controller.mock,
-                        onChanged: controller.connecting
-                            ? null
-                            : controller.setMock,
-                      ),
-                    ],
-                  ),
-                ),
-                if (controller.error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    controller.error!,
-                    style: const TextStyle(color: Colors.redAccent),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: C.accent,
-                      foregroundColor: Colors.black,
-                    ),
-                    onPressed:
-                        controller.connecting ? null : controller.connect,
-                    icon: controller.connecting
-                        ? const SizedBox(
-                            width: 19,
-                            height: 19,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                            ),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('PSR3', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  const Text('PlayStation 3 Remake', style: TextStyle(color: C.muted)),
+                  const SizedBox(height: 42),
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(22)),
+                    child: controller.connecting
+                        ? const Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.phone_android_rounded, color: Colors.white, size: 52),
+                                  SizedBox(width: 18),
+                                  ConnectingDots(),
+                                  SizedBox(width: 18),
+                                  Icon(Icons.sports_esports_rounded, color: Colors.white, size: 52),
+                                ],
+                              ),
+                              SizedBox(height: 22),
+                              Text('Подключение к PSR3…', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                              SizedBox(height: 6),
+                              Text('Около 4 секунд', style: TextStyle(color: C.muted)),
+                            ],
                           )
-                        : const Icon(Icons.link_rounded),
-                    label: Text(
-                      controller.connecting
-                          ? 'Подключение...'
-                          : 'Подключиться к PSR3',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
+                        : const Column(
+                            children: [
+                              Icon(Icons.phone_android_rounded, color: Colors.white, size: 62),
+                              SizedBox(height: 14),
+                              Text('Подключение через консоль', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                              SizedBox(height: 6),
+                              Text('Телефон подключится к PSR3.', style: TextStyle(color: C.muted)),
+                            ],
+                          ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+                  if (!controller.connecting)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(backgroundColor: C.blue, foregroundColor: Colors.white),
+                        onPressed: controller.connect,
+                        icon: const Icon(Icons.link_rounded, color: Colors.white),
+                        label: const Text('Подключиться через консоль', style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class ConnectingDots extends StatefulWidget {
+  const ConnectingDots({super.key});
+  @override
+  State<ConnectingDots> createState() => _ConnectingDotsState();
+}
+
+class _ConnectingDotsState extends State<ConnectingDots> with SingleTickerProviderStateMixin {
+  late final AnimationController a;
+  @override
+  void initState() {
+    super.initState();
+    a = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat();
+  }
+  @override
+  void dispose() { a.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: a,
+      builder: (_, __) => Row(
+        children: List.generate(5, (i) {
+          final on = ((a.value * 5).floor() % 5) == i;
+          return Container(
+            width: 8, height: 8,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: on ? C.blue : C.muted.withOpacity(.28)),
+          );
+        }),
       ),
     );
   }
@@ -509,7 +506,6 @@ class Frame extends StatelessWidget {
 
 class HomePage extends StatelessWidget {
   final PSR3Controller controller;
-
   const HomePage({super.key, required this.controller});
 
   @override
@@ -523,84 +519,53 @@ class HomePage extends StatelessWidget {
               AvatarView(controller: controller, size: 48),
               const SizedBox(width: 12),
               const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Максим Волошин',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      'PSR3 Online',
-                      style: TextStyle(
-                        color: C.muted,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Максим Волошин', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                  Text('Online', style: TextStyle(color: C.muted, fontSize: 13)),
+                ]),
               ),
-              Signal(mock: controller.mock),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: () => showSettings(context, controller),
-                icon: const Icon(Icons.settings_rounded),
-              ),
+              Signal(controller: controller),
+              IconButton(onPressed: () => showSettings(context, controller), icon: const Icon(Icons.settings_rounded, color: Colors.white)),
             ],
           ),
           const SizedBox(height: 26),
-          const Text(
-            'Новинки',
-            style: TextStyle(
-              fontSize: 27,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 12),
-          HeroCard(
-            game: games[0],
-            onTap: () => openGame(context, controller, games[0]),
-          ),
-          const SizedBox(height: 28),
-          SectionTitle(
-            icon: Icons.update_rounded,
-            title: 'Обновления',
-          ),
+          const Text('Новинки', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
           SizedBox(
-            height: 170,
+            height: 195,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: 4,
+              itemCount: games.length,
               separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (_, i) {
-                final game = games[i + 1];
-                return MiniCard(
-                  game: game,
-                  onTap: () => openGame(context, controller, game),
-                );
-              },
+              itemBuilder: (_, i) => MiniCard(game: games[i], onTap: () => openGame(context, controller, games[i])),
             ),
           ),
           const SizedBox(height: 28),
-          SectionTitle(
-            icon: Icons.science_rounded,
-            title: 'Бета-игры',
-          ),
+          const SectionTitle(icon: Icons.update_rounded, title: 'Обновления приложений'),
           const SizedBox(height: 12),
-          ...games.where((g) => g.beta).map(
-                (game) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: GameTile(
-                    game: game,
-                    controller: controller,
-                    onTap: () => openGame(context, controller, game),
-                  ),
-                ),
-              ),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
+            child: const Row(children: [
+              Icon(Icons.description_rounded, color: Colors.white, size: 30),
+              SizedBox(width: 13),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Ничего нового', style: TextStyle(fontWeight: FontWeight.w900)),
+                SizedBox(height: 4),
+                Text('Новых приложений и обновлений пока нет.', style: TextStyle(color: C.muted)),
+              ])),
+            ]),
+          ),
+          const SizedBox(height: 28),
+          const SectionTitle(icon: Icons.emoji_events_rounded, title: 'Трофеи, золотые и прогресс'),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: Trophy(icon: Icons.emoji_events_rounded, value: controller.trophyCount.toString(), label: 'Трофеев')),
+            const SizedBox(width: 10),
+            Expanded(child: Trophy(icon: Icons.workspace_premium_rounded, value: controller.goldCount.toString(), label: 'Золотых')),
+            const SizedBox(width: 10),
+            Expanded(child: Trophy(icon: Icons.bar_chart_rounded, value: (controller.collectionProgress * 100).round().toString() + '%', label: 'Прогресс')),
+          ]),
         ],
       ),
     );
@@ -609,158 +574,86 @@ class HomePage extends StatelessWidget {
 
 class StorePage extends StatelessWidget {
   final PSR3Controller controller;
-
   const StorePage({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
+    final gta = games.firstWhere((g) => g.id == 105);
     return Frame(
       ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 26),
         children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.shopping_bag_rounded,
-                color: C.accent,
-                size: 28,
-              ),
-              SizedBox(width: 10),
-              Text(
-                'PSR Store',
-                style: TextStyle(
-                  fontSize: 29,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Spacer(),
-              Icon(
-                Icons.search_rounded,
-                color: C.muted,
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Row(
-            children: [
-              Icon(
-                Icons.lock_open_rounded,
-                color: C.accent,
-                size: 18,
-              ),
-              SizedBox(width: 7),
-              Text(
-                'Все игры бесплатные',
-                style: TextStyle(color: C.muted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          HeroCard(
-            game: games[0],
-            onTap: () => openGame(context, controller, games[0]),
-          ),
-          const SizedBox(height: 26),
-          SectionTitle(
-            icon: Icons.apps_rounded,
-            title: 'Все игры',
-            trailing: '13+',
-          ),
-          const SizedBox(height: 12),
-          ...games.map(
-            (game) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GameTile(
-                game: game,
-                controller: controller,
-                onTap: () => openGame(context, controller, game),
-              ),
+          const Row(children: [
+            DecoratedBox(
+              decoration: BoxDecoration(color: C.blue, borderRadius: BorderRadius.all(Radius.circular(13))),
+              child: Padding(padding: EdgeInsets.all(11), child: Icon(Icons.shopping_bag_rounded, color: Colors.white, size: 25)),
+            ),
+            SizedBox(width: 12),
+            Text('PSR Store', style: TextStyle(fontSize: 29, fontWeight: FontWeight.w900)),
+          ]),
+          const SizedBox(height: 22),
+          InkWell(
+            onTap: () => openGame(context, controller, gta),
+            child: Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.blue)),
+              child: Row(children: [
+                SizedBox(width: 105, height: 105, child: ClipRRect(borderRadius: BorderRadius.circular(15), child: GameArtwork(game: gta))),
+                const SizedBox(width: 14),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4), decoration: BoxDecoration(color: C.blue, borderRadius: BorderRadius.circular(20)), child: const Text('Новинка', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
+                  const SizedBox(height: 8),
+                  Text(gta.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  const Text('36,50 ₴', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                ])),
+              ]),
             ),
           ),
+          const SizedBox(height: 26),
+          const SectionTitle(icon: Icons.apps_rounded, title: 'Все игры'),
+          const SizedBox(height: 12),
+          ...games.map((game) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: GameTile(game: game, controller: controller, onTap: () => openGame(context, controller, game)),
+          )),
         ],
       ),
     );
   }
 }
 
-class LibraryPage extends StatefulWidget {
+
+
+class LibraryPage extends StatelessWidget {
   final PSR3Controller controller;
-
   const LibraryPage({super.key, required this.controller});
-
-  @override
-  State<LibraryPage> createState() => _LibraryPageState();
-}
-
-class _LibraryPageState extends State<LibraryPage> {
-  int tab = 0;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: widget.controller,
+      animation: controller,
       builder: (_, __) {
-        final visible = tab == 0
-            ? games
-            : games
-                .where((g) => widget.controller.isInstalled(g.id))
-                .toList();
-
+        final visible = games.where((g) => controller.isInstalled(g.id)).toList();
         return Frame(
           ListView(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 26),
             children: [
-              const Row(
-                children: [
-                  Icon(
-                    Icons.grid_view_rounded,
-                    color: C.accent,
-                    size: 28,
-                  ),
-                  SizedBox(width: 10),
-                  Text(
-                    'Библиотека',
-                    style: TextStyle(
-                      fontSize: 29,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
+              const Row(children: [
+                Icon(Icons.grid_view_rounded, color: Colors.white, size: 28),
+                SizedBox(width: 10),
+                Text('Библиотека', style: TextStyle(fontSize: 29, fontWeight: FontWeight.w900)),
+              ]),
+              const SizedBox(height: 6),
+              const Text('Только установленные игры', style: TextStyle(color: C.muted)),
               const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: SquareTabButton(
-                      title: 'Все',
-                      icon: Icons.apps_rounded,
-                      selected: tab == 0,
-                      onTap: () => setState(() => tab = 0),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: SquareTabButton(
-                      title: 'Установленные',
-                      icon: Icons.download_done_rounded,
-                      selected: tab == 1,
-                      onTap: () => setState(() => tab = 1),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              ...visible.map(
-                (game) => Padding(
+              if (visible.isEmpty)
+                Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)), child: const Text('Установленных игр пока нет.'))
+              else
+                ...visible.map((game) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: GameTile(
-                    game: game,
-                    controller: widget.controller,
-                    onTap: () =>
-                        openGame(context, widget.controller, game),
-                  ),
-                ),
-              ),
+                  child: GameTile(game: game, controller: controller, onTap: () => openGame(context, controller, game)),
+                )),
             ],
           ),
         );
@@ -769,52 +662,7 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 }
 
-class SquareTabButton extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
 
-  const SquareTabButton({
-    super.key,
-    required this.title,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        height: 56,
-        decoration: BoxDecoration(
-          color: selected ? C.accent : C.card,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: selected ? Colors.black : C.muted,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                color: selected ? Colors.black : Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class ProfilePage extends StatelessWidget {
   final PSR3Controller controller;
