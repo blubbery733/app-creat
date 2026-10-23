@@ -312,7 +312,7 @@ class _LoginPageState extends State<LoginPage> {
                     Text(
                       'Войдите, чтобы продолжить',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.82),
+                        color: Colors.white.withValues(alpha: 0.82),
                         fontSize: 16,
                       ),
                     ),
@@ -388,7 +388,7 @@ class _LoginPageState extends State<LoginPage> {
                       'Тестовый вход: подойдут любые непустые данные',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.68),
+                        color: Colors.white.withValues(alpha: 0.68),
                         fontSize: 12,
                       ),
                     ),
