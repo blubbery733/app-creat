@@ -23,7 +23,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.0 Beta';
+const appVersionLabel = '0.4.1 Beta';
 const fullReleaseDate = '28 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 
