@@ -26,7 +26,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.3 Beta';
+const appVersionLabel = '0.4.4 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 final backSeatCoverBytes = base64Decode(backSeatCoverBase64);
@@ -738,12 +738,34 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int index = 0;
+  late final PageController pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    pageController.dispose();
+    super.dispose();
+  }
 
   void select(int value) {
+    if (index == value) return;
+
     if (index == 0 && value != 0) {
       widget.controller.clearInstallNotice();
     }
+
     setState(() => index = value);
+
+    pageController.animateToPage(
+      value,
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -758,8 +780,14 @@ class _ShellState extends State<Shell> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: IndexedStack(
-          index: index,
+        child: PageView(
+          controller: pageController,
+          physics: const NeverScrollableScrollPhysics(),
+          onPageChanged: (value) {
+            if (index != value) {
+              setState(() => index = value);
+            }
+          },
           children: pages,
         ),
       ),
