@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -7,6 +8,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'backseat_cover.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +29,7 @@ class C {
 const appVersionLabel = '0.4.3 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
+final backSeatCoverBytes = base64Decode(backSeatCoverBase64);
 
 Color usageColor(double value) {
   if (value < 0.35) return const Color(0xFF2E9B67);
@@ -142,7 +146,6 @@ const games = <Game>[
     sizeMb: 427,
     rating: '13+',
     dimension: '3D/2D',
-    downloadRange: '3–5 минут',
     inDevelopment: true,
     remotePlay: true,
     dolbyAtmos: true,
@@ -167,6 +170,7 @@ class PSR3Controller extends ChangeNotifier {
   final timers = <int, Timer>{};
   final removalTimers = <int, Timer>{};
   final AudioPlayer audio = AudioPlayer();
+  final AudioPlayer audioBoost = AudioPlayer();
   final ImagePicker picker = ImagePicker();
 
   PSR3Controller() {
@@ -259,8 +263,17 @@ class PSR3Controller extends ChangeNotifier {
 
   Future<void> playSound(String file) async {
     try {
-      await audio.stop();
-      await audio.play(AssetSource('audio/' + file));
+      await Future.wait([
+        audio.stop(),
+        audioBoost.stop(),
+      ]);
+      await audio.setVolume(1.0);
+      await audioBoost.setVolume(0.85);
+      final source = AssetSource('audio/' + file);
+      await Future.wait([
+        audio.play(source),
+        audioBoost.play(AssetSource('audio/' + file)),
+      ]);
     } catch (_) {}
   }
 
@@ -316,17 +329,17 @@ class PSR3Controller extends ChangeNotifier {
     notifyListeners();
 
     final completer = Completer<void>();
-    var elapsed = 0;
+    final stopwatch = Stopwatch()..start();
     const total = 3500;
 
     removalTimers[game.id] = Timer.periodic(
-      const Duration(milliseconds: 250),
+      const Duration(milliseconds: 16),
       (timer) async {
-        elapsed += 250;
-        final value = (elapsed / total).clamp(0.0, 1.0);
-        removalProgress[game.id] = value;
+        final raw = (stopwatch.elapsedMilliseconds / total).clamp(0.0, 1.0);
+        removalProgress[game.id] = Curves.easeInOutCubic.transform(raw);
 
-        if (value >= 1) {
+        if (raw >= 1) {
+          stopwatch.stop();
           timer.cancel();
           removalTimers.remove(game.id);
           removalProgress.remove(game.id);
@@ -396,6 +409,7 @@ class PSR3Controller extends ChangeNotifier {
       timer.cancel();
     }
     unawaited(audio.dispose());
+    unawaited(audioBoost.dispose());
     super.dispose();
   }
 }
@@ -1449,6 +1463,17 @@ class GameArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (game.id == 107) {
+      return ColoredBox(
+        color: C.card2,
+        child: Image.memory(
+          backSeatCoverBytes,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+        ),
+      );
+    }
+
     if (game.coverAsset != null) {
       return ColoredBox(
         color: C.card2,
