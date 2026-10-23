@@ -1,27 +1,23 @@
-# PSR3 PC App
+# PSR3 Android
 
-Windows companion application for the PSR3 ESP32 console project.
+Новый Android-проект PSR3, собранный с нуля по референсам интерфейса.
 
-## Current app
+## Что уже есть
 
-- PlayStation-app-inspired dark/blue interface
-- Start screen with **ESP32** and **Remote Play**
-- Working **Dashboard** and **Settings** navigation
-- Default Wi-Fi: `PSR3`
-- Default ESP32 IP: `192.168.4.1`
-- Real connection probe: `http://192.168.4.1/api/status`
-- Remote Play pairing UI with an exact 4-digit code
-- Demo mode for UI testing
-- Recovery remains on the TV through AV
+- экран входа;
+- главный экран;
+- PSR Store;
+- библиотека установленных игр;
+- обложки Fortnite, Creature, MP3Dtest, Minecraft Beta, Terraria и GTA beta;
+- звук ошибки для ошибок приложения;
+- звук кнопки установки;
+- звук уведомления после завершения установки;
+- сохранение библиотеки между запусками приложения.
 
-## Build
+Сейчас установка игр является демонстрационной: приложение показывает прогресс и добавляет игру в библиотеку. Реальные игровые пакеты пока не подключены.
 
-GitHub Actions builds the Windows release automatically on every push to `main`.
+## APK
 
-1. Open **Actions**
-2. Open **Build PSR3 Windows**
-3. Open the latest successful run
-4. Download the **PSR3-Windows** artifact
-5. Extract the whole archive and run the EXE from that folder
+GitHub Actions автоматически собирает Android release APK после каждого изменения в main.
 
-Keep the EXE together with its DLL files and the `data` folder.
+Открой Actions -> Build PSR3 Android APK -> последний успешный запуск -> Artifacts -> PSR3-Android-APK.
