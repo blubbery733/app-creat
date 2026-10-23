@@ -49,6 +49,15 @@ Widget roundedProgress({
   );
 }
 
+String priceLabel(Game game) {
+  final price = game.priceUah;
+  if (price == null) return 'Бесплатно';
+  if (price == price.roundToDouble()) {
+    return price.toStringAsFixed(0) + ' грн';
+  }
+  return price.toStringAsFixed(2).replaceAll('.', ',') + ' ₴';
+}
+
 enum Stage { connect, blackout, ready }
 
 class Game {
@@ -198,6 +207,15 @@ class PSR3Controller extends ChangeNotifier {
       installed
         ..clear()
         ..addAll(savedGames.map(int.tryParse).whereType<int>());
+    }
+
+    if (prefs.getBool('v043_remove_default_mp3d') != true) {
+      installed.remove(106);
+      await prefs.setStringList(
+        'installed_game_ids_v4',
+        installed.map((id) => id.toString()).toList(),
+      );
+      await prefs.setBool('v043_remove_default_mp3d', true);
     }
 
     if (savedAvatar != null && File(savedAvatar).existsSync()) {
@@ -1240,6 +1258,10 @@ class GamePage extends StatelessWidget {
                       const InfoChip(icon: Icons.science_rounded, text: 'Beta'),
                     if (game.dimension.isNotEmpty)
                       InfoChip(icon: Icons.view_in_ar_rounded, text: game.dimension),
+                    if (game.inDevelopment)
+                      const InfoChip(icon: Icons.construction_rounded, text: 'В разработке'),
+                    if (game.downloadRange.isNotEmpty)
+                      InfoChip(icon: Icons.schedule_rounded, text: game.downloadRange),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -1270,10 +1292,37 @@ class GamePage extends StatelessWidget {
                   ]),
                 ),
                 const SizedBox(height: 20),
-                if (game.isPaid) ...[
-                  const Text(
-                    '36,50 ₴',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                if (game.inDevelopment) ...[
+                  Text(
+                    priceLabel(game),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 52,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        disabledBackgroundColor: Colors.white.withOpacity(.16),
+                        disabledForegroundColor: Colors.white70,
+                      ),
+                      onPressed: null,
+                      icon: const Icon(Icons.construction_rounded),
+                      label: const Text(
+                        'В разработке',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ),
+                ] else if (game.isPaid) ...[
+                  Text(
+                    priceLabel(game),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
@@ -1375,6 +1424,16 @@ class GamePage extends StatelessWidget {
                     style: const TextStyle(fontSize: 15, height: 1.5),
                   ),
                 ),
+                const SizedBox(height: 18),
+                const Feature(
+                  icon: Icons.desktop_windows_rounded,
+                  text: 'Поддерживается дистанционная игра в приложении PSR3 для Windows.',
+                ),
+                if (game.dolbyAtmos)
+                  const Feature(
+                    icon: Icons.surround_sound_rounded,
+                    text: 'Поддерживается Dolby Atmos sound',
+                  ),
               ],
             ),
           ),
@@ -1746,7 +1805,7 @@ class GameTile extends StatelessWidget {
                       ),
                     )
                   else
-                    Text(game.isPaid ? '36,50 ₴' : 'Бесплатно', style: const TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                    Text(priceLabel(game), style: const TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
