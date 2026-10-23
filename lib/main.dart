@@ -1,840 +1,995 @@
 import 'dart:async';
-
-import 'package:audioplayers/audioplayers.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const Psr3App());
+void main() => runApp(const PSR3App());
+
+class C {
+  static const bg = Color(0xFF0B0E14);
+  static const card = Color(0xFF1F232B);
+  static const card2 = Color(0xFF161A21);
+  static const blue = Color(0xFF0070D1);
+  static const muted = Color(0xFF8E939D);
 }
 
-const psBlue = Color(0xFF0667D8);
-const psBlueDark = Color(0xFF003A8C);
-const pageBg = Color(0xFFF5F7FB);
-const ink = Color(0xFF151A22);
-const muted = Color(0xFF6D7480);
+enum Stage { connect, blackout, ready }
 
-class GameItem {
-  final String id;
-  final String title;
-  final String cover;
-
-  const GameItem(this.id, this.title, this.cover);
+class Game {
+  final int id, seconds;
+  final String name, dev, subtitle, description;
+  final bool beta;
+  final IconData icon;
+  const Game(this.id, this.name, this.dev, this.subtitle, this.description,
+      this.seconds, this.beta, this.icon);
 }
 
-const games = <GameItem>[
-  GameItem('fortnite', 'Fortnite', 'assets/covers/fortnite.svg'),
-  GameItem('creature', 'Creature', 'assets/covers/creature.svg'),
-  GameItem('mp3dtest', 'MP3Dtest', 'assets/covers/mp3dtest.svg'),
-  GameItem('minecraft_beta', 'Minecraft Beta', 'assets/covers/minecraft_beta.svg'),
-  GameItem('terraria', 'Terraria', 'assets/covers/terraria.svg'),
-  GameItem('gta_beta', 'GTA beta', 'assets/covers/gta_beta.svg'),
+const gameList = <Game>[
+  Game(1, 'MP3Dtest', 'ReGame LAB + Playstation Apsy',
+      'Minecraft Parkour 3D test game',
+      'Тестовая 3D-игра в стиле Minecraft. Проект создан на платформе ReGame LAB + Playstation Apsy для проверки паркура, управления и игровых возможностей PSR3.',
+      24, true, Icons.view_in_ar_rounded),
+  Game(2, 'Neon Track', 'ReGame LAB', 'Аркадные заезды в неоновом городе',
+      'Аркадная гоночная игра с короткими трассами и быстрыми перезапусками.',
+      28, false, Icons.sports_motorsports_rounded),
+  Game(3, 'Cube Runner', 'Playstation Apsy', 'Раннер с препятствиями',
+      'Быстрый раннер: проходи уровни, избегай препятствий и собирай игровые призы.',
+      22, false, Icons.crop_square_rounded),
+  Game(4, 'ReGame Arena', 'ReGame LAB', 'Мини-арена для быстрых матчей',
+      'Небольшая тестовая арена для коротких игровых сессий и проверки управления.',
+      34, true, Icons.sports_esports_rounded),
+  Game(5, 'Sky Lines Beta', 'ReGame LAB', 'Полёт между платформами',
+      'Экспериментальная игра с воздушными трассами и тестовыми испытаниями.',
+      30, true, Icons.flight_takeoff_rounded),
+  Game(6, 'Pixel Drift', 'Playstation Apsy', 'Пиксельная аркада на время',
+      'Лёгкая аркада с короткими заездами на время для библиотеки PSR3.',
+      26, false, Icons.speed_rounded),
 ];
 
-class Psr3App extends StatelessWidget {
-  const Psr3App({super.key});
+class PSR3Controller extends ChangeNotifier {
+  Stage stage = Stage.connect;
+  bool mock = true;
+  bool connecting = false;
+  String esp = 'http://192.168.4.1';
+  String? error;
+  int avatar = 0;
+  final installed = <int>{2, 3, 4, 5};
+  final progress = <int, double>{};
+  final timers = <int, Timer>{};
+
+  bool isInstalled(int id) => installed.contains(id);
+  bool isInstalling(int id) => progress.containsKey(id);
+
+  Future<void> connect() async {
+    if (connecting) return;
+    connecting = true;
+    error = null;
+    notifyListeners();
+    bool ok;
+    if (mock) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      ok = true;
+    } else {
+      ok = await ping();
+    }
+    connecting = false;
+    if (!ok) {
+      error = 'Не удалось подключиться к ESP32: ' + esp;
+      notifyListeners();
+      return;
+    }
+    stage = Stage.blackout;
+    notifyListeners();
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    stage = Stage.ready;
+    notifyListeners();
+  }
+
+  Future<bool> ping() async {
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
+      final req = await client.getUrl(Uri.parse(esp + '/status'));
+      final res = await req.close().timeout(const Duration(seconds: 3));
+      await res.drain<void>();
+      return res.statusCode >= 200 && res.statusCode < 500;
+    } catch (_) {
+      return false;
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
+  Future<bool> sendGameId(Game g) async {
+    if (mock) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      return true;
+    }
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
+      final uri = Uri.parse(esp + '/game').replace(queryParameters: {
+        'id': g.id.toString(),
+        'name': g.name,
+      });
+      final req = await client.postUrl(uri);
+      req.headers.contentType = ContentType.json;
+      req.write('{"gameId":' + g.id.toString() + ',"gameName":"' + g.name + '"}');
+      final res = await req.close().timeout(const Duration(seconds: 4));
+      await res.drain<void>();
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
+  Future<bool> install(Game g) async {
+    if (isInstalled(g.id) || isInstalling(g.id)) return true;
+    if (!await sendGameId(g)) return false;
+    progress[g.id] = 0;
+    notifyListeners();
+    var elapsed = 0;
+    final total = g.seconds * 1000;
+    timers[g.id] = Timer.periodic(const Duration(milliseconds: 250), (t) {
+      elapsed += 250;
+      final value = (elapsed / total).clamp(0.0, 1.0);
+      progress[g.id] = value;
+      if (value >= 1) {
+        t.cancel();
+        timers.remove(g.id);
+        progress.remove(g.id);
+        installed.add(g.id);
+      }
+      notifyListeners();
+    });
+    return true;
+  }
+
+  void cycleAvatar() {
+    avatar = (avatar + 1) % 4;
+    notifyListeners();
+  }
+
+  void setMock(bool v) {
+    mock = v;
+    notifyListeners();
+  }
+
+  void setEsp(String v) {
+    var s = v.trim();
+    if (s.isEmpty) return;
+    if (!s.startsWith('http://') && !s.startsWith('https://')) s = 'http://' + s;
+    if (s.endsWith('/')) s = s.substring(0, s.length - 1);
+    esp = s;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    for (final t in timers.values) {
+      t.cancel();
+    }
+    super.dispose();
+  }
+}
+
+class PSR3App extends StatefulWidget {
+  const PSR3App({super.key});
+  @override
+  State<PSR3App> createState() => _PSR3AppState();
+}
+
+class _PSR3AppState extends State<PSR3App> {
+  late final PSR3Controller controller;
+  @override
+  void initState() {
+    super.initState();
+    controller = PSR3Controller();
+  }
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'PSR3',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: C.bg,
+        colorScheme: const ColorScheme.dark(primary: C.blue, surface: C.card),
         useMaterial3: true,
-        scaffoldBackgroundColor: pageBg,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: psBlue,
-          brightness: Brightness.light,
-        ),
-        fontFamily: 'ZenMaru',
+        fontFamily: 'Segoe UI',
       ),
-      home: const RootPage(),
-    );
-  }
-}
-
-class RootPage extends StatefulWidget {
-  const RootPage({super.key});
-
-  @override
-  State<RootPage> createState() => _RootPageState();
-}
-
-class _RootPageState extends State<RootPage> {
-  final AudioPlayer audio = AudioPlayer();
-  final Set<String> installed = <String>{};
-  final Map<String, double> progress = <String, double>{};
-
-  bool loading = true;
-  bool signedIn = false;
-  int tab = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    loadState();
-  }
-
-  @override
-  void dispose() {
-    unawaited(audio.dispose());
-    super.dispose();
-  }
-
-  Future<void> loadState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('installed_games') ?? const <String>[];
-    if (!mounted) return;
-    setState(() {
-      installed.addAll(saved);
-      signedIn = prefs.getBool('signed_in') ?? false;
-      loading = false;
-    });
-  }
-
-  Future<void> saveInstalled() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('installed_games', installed.toList());
-  }
-
-  Future<void> playSound(String path) async {
-    try {
-      await audio.stop();
-      await audio.setReleaseMode(ReleaseMode.stop);
-      await audio.play(AssetSource(path));
-    } catch (_) {}
-  }
-
-  Future<void> showError(String message) async {
-    unawaited(playSound('audio/error.mp3'));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-  }
-
-  Future<void> signIn(String login, String password) async {
-    if (login.trim().isEmpty || password.trim().isEmpty) {
-      await showError('Введите логин и пароль');
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('signed_in', true);
-    if (!mounted) return;
-    setState(() => signedIn = true);
-  }
-
-  Future<void> signOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('signed_in', false);
-    if (!mounted) return;
-    setState(() {
-      signedIn = false;
-      tab = 0;
-    });
-  }
-
-  Future<void> installGame(GameItem game) async {
-    if (installed.contains(game.id)) {
-      setState(() => tab = 2);
-      return;
-    }
-    if (progress.containsKey(game.id)) {
-      await showError('Установка уже идёт');
-      return;
-    }
-
-    await playSound('audio/install.mp3');
-    if (!mounted) return;
-    setState(() => progress[game.id] = 0);
-
-    for (var i = 1; i <= 25; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 70));
-      if (!mounted) return;
-      setState(() => progress[game.id] = i / 25);
-    }
-
-    setState(() {
-      progress.remove(game.id);
-      installed.add(game.id);
-    });
-    await saveInstalled();
-    await playSound('audio/notification.mp3');
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('${game.title} установлена'),
-          action: SnackBarAction(
-            label: 'Библиотека',
-            onPressed: () => setState(() => tab = 2),
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (!signedIn) {
-      return LoginPage(onLogin: signIn);
-    }
-
-    final pages = <Widget>[
-      HomeScreen(
-        installed: installed,
-        onOpenStore: () => setState(() => tab = 1),
-        onInstall: installGame,
-      ),
-      StoreScreen(
-        installed: installed,
-        progress: progress,
-        onInstall: installGame,
-      ),
-      LibraryScreen(
-        installed: installed,
-        onOpenStore: () => setState(() => tab = 1),
-      ),
-      ProfileScreen(onLogout: signOut),
-    ];
-
-    return Scaffold(
-      body: SafeArea(child: pages[tab]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (value) => setState(() => tab = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Главная',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.shopping_bag_outlined),
-            selectedIcon: Icon(Icons.shopping_bag_rounded),
-            label: 'PSR Store',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view_rounded),
-            label: 'Библиотека',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Профиль',
-          ),
-        ],
+      home: AnimatedBuilder(
+        animation: controller,
+        builder: (_, __) {
+          if (controller.stage == Stage.blackout) {
+            return const ColoredBox(color: Colors.black);
+          }
+          if (controller.stage == Stage.ready) {
+            return Shell(controller: controller);
+          }
+          return ConnectPage(controller: controller);
+        },
       ),
     );
   }
 }
 
-class LoginPage extends StatefulWidget {
-  final Future<void> Function(String login, String password) onLogin;
-
-  const LoginPage({super.key, required this.onLogin});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  final login = TextEditingController();
-  final password = TextEditingController();
-  bool obscure = true;
-  bool busy = false;
-
-  @override
-  void dispose() {
-    login.dispose();
-    password.dispose();
-    super.dispose();
-  }
-
-  Future<void> submit() async {
-    if (busy) return;
-    setState(() => busy = true);
-    await widget.onLogin(login.text, password.text);
-    if (mounted) setState(() => busy = false);
-  }
+class ConnectPage extends StatelessWidget {
+  final PSR3Controller controller;
+  const ConnectPage({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0477E7), Color(0xFF003B91)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.sports_esports_rounded,
-                      color: Colors.white,
-                      size: 72,
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'PSR3',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 38,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Войдите, чтобы продолжить',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 38),
-                    Container(
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x33000000),
-                            blurRadius: 30,
-                            offset: Offset(0, 12),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          TextField(
-                            controller: login,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(
-                              labelText: 'Логин',
-                              prefixIcon: Icon(Icons.person_outline),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          TextField(
-                            controller: password,
-                            obscureText: obscure,
-                            onSubmitted: (_) => submit(),
-                            decoration: InputDecoration(
-                              labelText: 'Пароль',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                onPressed: () =>
-                                    setState(() => obscure = !obscure),
-                                icon: Icon(
-                                  obscure
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 22),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: FilledButton(
-                              onPressed: busy ? null : submit,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: psBlue,
-                              ),
-                              child: busy
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text('Войти'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Тестовый вход: подойдут любые непустые данные',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.68),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class HomeScreen extends StatelessWidget {
-  final Set<String> installed;
-  final VoidCallback onOpenStore;
-  final Future<void> Function(GameItem game) onInstall;
-
-  const HomeScreen({
-    super.key,
-    required this.installed,
-    required this.onOpenStore,
-    required this.onInstall,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final featured = games.take(3).toList();
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(22, 26, 22, 34),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF0571E5), Color(0xFF0050B7)],
-              ),
-              borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(30),
-              ),
-            ),
-            child: const Row(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor: Colors.white24,
-                  child: Icon(Icons.sports_esports, color: Colors.white),
-                ),
-                SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const Icon(Icons.sports_esports_rounded, size: 80, color: C.blue),
+                const SizedBox(height: 16),
+                const Text('PSR3',
+                    style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900)),
+                const Text('Playstation 3 Remale',
+                    style: TextStyle(color: C.muted, fontSize: 16)),
+                const SizedBox(height: 30),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                      color: C.card, borderRadius: BorderRadius.circular(18)),
+                  child: Row(
                     children: [
-                      Text(
-                        'Добро пожаловать',
-                        style: TextStyle(color: Colors.white70),
+                      const Icon(Icons.router_rounded),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(controller.mock
+                            ? 'Mock Mode — ESP32 не требуется'
+                            : controller.esp),
                       ),
-                      SizedBox(height: 2),
-                      Text(
-                        'PSR3',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Switch(
+                        value: controller.mock,
+                        onChanged: controller.connecting ? null : controller.setMock,
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.notifications_none_rounded, color: Colors.white),
+                if (controller.error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(controller.error!,
+                      style: const TextStyle(color: Colors.redAccent)),
+                ],
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton.icon(
+                    onPressed: controller.connecting ? null : controller.connect,
+                    icon: controller.connecting
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.link_rounded),
+                    label: Text(controller.connecting
+                        ? 'Подключение...'
+                        : 'Подключиться к PSR3'),
+                  ),
+                ),
               ],
             ),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Популярное',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: ink,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: onOpenStore,
-                    child: const Text('Все игры'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 230,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: featured.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 14),
-                  itemBuilder: (context, index) {
-                    final game = featured[index];
-                    return SizedBox(
-                      width: 175,
-                      child: GameCard(
-                        game: game,
-                        installed: installed.contains(game.id),
-                        progress: null,
-                        compact: true,
-                        onInstall: () => onInstall(game),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 28),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE7F1FF),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.download_done_rounded,
-                        color: psBlue,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        installed.isEmpty
-                            ? 'Установленных игр пока нет'
-                            : 'В библиотеке: ${installed.length}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ]),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class StoreScreen extends StatelessWidget {
-  final Set<String> installed;
-  final Map<String, double> progress;
-  final Future<void> Function(GameItem game) onInstall;
+class Shell extends StatefulWidget {
+  final PSR3Controller controller;
+  const Shell({super.key, required this.controller});
+  @override
+  State<Shell> createState() => _ShellState();
+}
 
-  const StoreScreen({
-    super.key,
-    required this.installed,
-    required this.progress,
-    required this.onInstall,
-  });
-
+class _ShellState extends State<Shell> {
+  int index = 0;
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        const SliverAppBar(
-          pinned: true,
-          backgroundColor: pageBg,
-          surfaceTintColor: pageBg,
-          title: Text(
-            'PSR Store',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          sliver: SliverGrid(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final game = games[index];
-                return GameCard(
-                  game: game,
-                  installed: installed.contains(game.id),
-                  progress: progress[game.id],
-                  onInstall: () => onInstall(game),
-                );
-              },
-              childCount: games.length,
-            ),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 16,
-              childAspectRatio: 0.72,
-            ),
-          ),
-        ),
-      ],
+    final pages = [
+      HomePage(c: widget.controller),
+      StorePage(c: widget.controller),
+      LibraryPage(c: widget.controller),
+      ProfilePage(c: widget.controller),
+    ];
+    return Scaffold(
+      body: SafeArea(child: IndexedStack(index: index, children: pages)),
+      bottomNavigationBar: NavigationBar(
+        height: 72,
+        backgroundColor: C.card,
+        indicatorColor: C.blue.withOpacity(.22),
+        selectedIndex: index,
+        onDestinationSelected: (v) => setState(() => index = v),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home), label: 'Главная'),
+          NavigationDestination(icon: Icon(Icons.shopping_bag_outlined),
+              selectedIcon: Icon(Icons.shopping_bag), label: 'PSR Store'),
+          NavigationDestination(icon: Icon(Icons.video_library_outlined),
+              selectedIcon: Icon(Icons.video_library), label: 'Библиотека'),
+          NavigationDestination(icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person), label: 'Профиль'),
+        ],
+      ),
     );
   }
 }
 
-class LibraryScreen extends StatelessWidget {
-  final Set<String> installed;
-  final VoidCallback onOpenStore;
-
-  const LibraryScreen({
-    super.key,
-    required this.installed,
-    required this.onOpenStore,
-  });
-
+class Frame extends StatelessWidget {
+  final Widget child;
+  const Frame(this.child, {super.key});
   @override
-  Widget build(BuildContext context) {
-    final items = games.where((g) => installed.contains(g.id)).toList();
-
-    if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.grid_view_rounded,
-                size: 78,
-                color: Color(0xFF9AA5B4),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Библиотека пуста',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Установленные игры будут появляться здесь.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: muted),
-              ),
-              const SizedBox(height: 22),
-              FilledButton(
-                onPressed: onOpenStore,
-                child: const Text('Открыть PSR Store'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return CustomScrollView(
-      slivers: [
-        const SliverAppBar(
-          pinned: true,
-          backgroundColor: pageBg,
-          surfaceTintColor: pageBg,
-          title: Text(
-            'Библиотека',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          sliver: SliverGrid(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => GameCard(
-                game: items[index],
-                installed: true,
-                progress: null,
-                onInstall: () {},
-              ),
-              childCount: items.length,
-            ),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 16,
-              childAspectRatio: 0.72,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1050), child: child),
+  );
 }
 
-class ProfileScreen extends StatelessWidget {
-  final Future<void> Function() onLogout;
-
-  const ProfileScreen({super.key, required this.onLogout});
-
+class HomePage extends StatelessWidget {
+  final PSR3Controller c;
+  const HomePage({super.key, required this.c});
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
+    return Frame(ListView(
+      padding: const EdgeInsets.all(24),
       children: [
-        const SizedBox(height: 12),
-        const CircleAvatar(
-          radius: 44,
-          backgroundColor: Color(0xFFE0ECFF),
-          child: Icon(Icons.person_rounded, color: psBlue, size: 48),
-        ),
+        Row(children: [
+          Avatar(c: c, size: 48),
+          const SizedBox(width: 12),
+          const Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Максим Волошин',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              Text('PSR3 Online',
+                  style: TextStyle(color: C.muted, fontSize: 13)),
+            ],
+          )),
+          Signal(mock: c.mock),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => showSettings(context, c),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ]),
+        const SizedBox(height: 28),
+        const Text('Новинки',
+            style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
         const SizedBox(height: 14),
-        const Center(
-          child: Text(
-            'PSR3 User',
-            style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
+        HeroCard(game: gameList[0],
+            onTap: () => openGame(context, c, gameList[0])),
+        const SizedBox(height: 28),
+        const Text('Обновления',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 175,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: 4,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (_, i) => MiniCard(
+              game: gameList[i + 1],
+              onTap: () => openGame(context, c, gameList[i + 1]),
+            ),
           ),
         ),
         const SizedBox(height: 28),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.info_outline_rounded),
-            title: const Text('Версия приложения'),
-            trailing: const Text('0.1.0'),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.logout_rounded),
-            title: const Text('Выйти'),
-            onTap: onLogout,
-          ),
-        ),
+        const Text('Бета-игры',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 12),
+        ...gameList.where((g) => g.beta).map((g) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: GameTile(game: g, c: c,
+              onTap: () => openGame(context, c, g)),
+        )),
       ],
+    ));
+  }
+}
+
+class StorePage extends StatelessWidget {
+  final PSR3Controller c;
+  const StorePage({super.key, required this.c});
+  @override
+  Widget build(BuildContext context) {
+    return Frame(ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Row(children: [
+          Text('PSR Store',
+              style: TextStyle(fontSize: 29, fontWeight: FontWeight.w900)),
+          Spacer(),
+          Icon(Icons.search_rounded, color: C.muted),
+        ]),
+        const SizedBox(height: 5),
+        const Text('Все игры бесплатные',
+            style: TextStyle(color: C.muted)),
+        const SizedBox(height: 20),
+        HeroCard(game: gameList[0],
+            onTap: () => openGame(context, c, gameList[0])),
+        const SizedBox(height: 26),
+        const Row(children: [
+          Text('Все игры',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          Spacer(),
+          Text('13+', style: TextStyle(color: C.muted)),
+        ]),
+        const SizedBox(height: 12),
+        ...gameList.map((g) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: GameTile(game: g, c: c,
+              onTap: () => openGame(context, c, g)),
+        )),
+      ],
+    ));
+  }
+}
+
+class LibraryPage extends StatefulWidget {
+  final PSR3Controller c;
+  const LibraryPage({super.key, required this.c});
+  @override
+  State<LibraryPage> createState() => _LibraryPageState();
+}
+
+class _LibraryPageState extends State<LibraryPage> {
+  int tab = 0;
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.c,
+      builder: (_, __) {
+        final list = tab == 0
+            ? gameList
+            : gameList.where((g) => widget.c.isInstalled(g.id)).toList();
+        return Frame(ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Text('Библиотека',
+                style: TextStyle(fontSize: 29, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 18),
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 0, label: Text('Все')),
+                ButtonSegment(value: 1, label: Text('Установленные')),
+              ],
+              selected: {tab},
+              onSelectionChanged: (v) => setState(() => tab = v.first),
+            ),
+            const SizedBox(height: 18),
+            ...list.map((g) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: GameTile(game: g, c: widget.c,
+                  onTap: () => openGame(context, widget.c, g)),
+            )),
+          ],
+        ));
+      },
     );
   }
 }
 
-class GameCard extends StatelessWidget {
-  final GameItem game;
-  final bool installed;
-  final double? progress;
-  final VoidCallback onInstall;
-  final bool compact;
+class ProfilePage extends StatelessWidget {
+  final PSR3Controller c;
+  const ProfilePage({super.key, required this.c});
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: c,
+      builder: (_, __) {
+        final installedGames =
+            gameList.where((g) => c.isInstalled(g.id)).take(4).toList();
+        return Frame(ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Text('SONY',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900,
+                    letterSpacing: 3)),
+            const SizedBox(height: 22),
+            Row(children: [
+              GestureDetector(
+                onDoubleTap: () {
+                  c.cycleAvatar();
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Аватар изменён'),
+                    duration: Duration(milliseconds: 800),
+                  ));
+                },
+                child: Tooltip(
+                    message: 'Двойное нажатие — сменить аватар',
+                    child: Avatar(c: c, size: 92)),
+              ),
+              const SizedBox(width: 20),
+              const Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Максим Волошин',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                  SizedBox(height: 5),
+                  Text('Игрок PSR3', style: TextStyle(color: C.muted)),
+                ],
+              )),
+            ]),
+            const SizedBox(height: 22),
+            const Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Уровень 12',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  SizedBox(height: 7),
+                  LinearProgressIndicator(
+                    value: .68, minHeight: 8, backgroundColor: C.card,
+                    valueColor: AlwaysStoppedAnimation<Color>(C.blue),
+                  ),
+                ],
+              )),
+              SizedBox(width: 18),
+              Text('PSR3 (Playstation 3 Remale)',
+                  style: TextStyle(color: C.muted, fontSize: 13)),
+            ]),
+            const SizedBox(height: 30),
+            const Text('Игровые призы',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            const Row(children: [
+              Expanded(child: Trophy(icon: Icons.emoji_events, value: '18',
+                  label: 'Трофеев')),
+              SizedBox(width: 10),
+              Expanded(child: Trophy(icon: Icons.workspace_premium, value: '4',
+                  label: 'Золотых')),
+              SizedBox(width: 10),
+              Expanded(child: Trophy(icon: Icons.stars, value: '68%',
+                  label: 'Прогресс')),
+            ]),
+            const SizedBox(height: 30),
+            Row(children: [
+              const Text('Установленные игры',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const Spacer(),
+              Text(installedGames.length.toString() + '/4',
+                  style: const TextStyle(color: C.muted)),
+            ]),
+            const SizedBox(height: 12),
+            ...installedGames.map((g) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GameTile(game: g, c: c,
+                  onTap: () => openGame(context, c, g)),
+            )),
+          ],
+        ));
+      },
+    );
+  }
+}
 
-  const GameCard({
-    super.key,
-    required this.game,
-    required this.installed,
-    required this.progress,
-    required this.onInstall,
-    this.compact = false,
-  });
+class GamePage extends StatelessWidget {
+  final PSR3Controller c;
+  final Game game;
+  const GamePage({super.key, required this.c, required this.game});
 
   @override
   Widget build(BuildContext context) {
-    final installing = progress != null;
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 12,
-            offset: Offset(0, 5),
+    return AnimatedBuilder(
+      animation: c,
+      builder: (_, __) {
+        final installed = c.isInstalled(game.id);
+        final installing = c.isInstalling(game.id);
+        final p = c.progress[game.id] ?? 0;
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: C.bg,
+            surfaceTintColor: Colors.transparent,
+            title: const Text('PSR Store',
+                style: TextStyle(fontWeight: FontWeight.w900)),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: ColoredBox(
-              color: const Color(0xFFE8ECF2),
-              child: SvgPicture.asset(
-                game.cover,
-                fit: BoxFit.cover,
-                placeholderBuilder: (_) =>
-                    const Center(child: CircularProgressIndicator()),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 12 : 13,
-              10,
-              compact ? 12 : 13,
-              12,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  game.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: ink,
+          body: Frame(ListView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 36),
+            children: [
+              Container(
+                height: 320,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [Color(0xFF405B78), Color(0xFF182B40), C.bg],
                   ),
                 ),
-                const SizedBox(height: 8),
-                if (installing) ...[
-                  LinearProgressIndicator(value: progress),
-                  const SizedBox(height: 5),
-                  Text(
-                    '${((progress ?? 0) * 100).round()}%',
-                    style: const TextStyle(color: muted, fontSize: 12),
-                  ),
-                ] else
-                  SizedBox(
-                    width: double.infinity,
-                    height: 38,
-                    child: installed
-                        ? OutlinedButton.icon(
-                            onPressed: onInstall,
-                            icon: const Icon(Icons.check_rounded, size: 18),
-                            label: const Text('Установлено'),
-                          )
-                        : FilledButton(
-                            onPressed: onInstall,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: psBlue,
-                              padding: EdgeInsets.zero,
-                            ),
-                            child: const Text('Установить'),
+                child: Center(child: Icon(game.icon, size: 170,
+                    color: Colors.white.withOpacity(.82))),
+              ),
+              const SizedBox(height: 18),
+              Text(game.name,
+                  style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+              Text(game.dev,
+                  style: const TextStyle(color: C.muted, fontSize: 15)),
+              const SizedBox(height: 16),
+              Row(children: [
+                const Chip(label: Text('Информация')),
+                if (game.beta) ...[
+                  const SizedBox(width: 8),
+                  const Chip(label: Text('Beta')),
+                ],
+              ]),
+              const SizedBox(height: 18),
+              const StoreInfoCard(),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                    color: C.card, borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Бесплатно',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 13),
+                    if (installing) ...[
+                      LinearProgressIndicator(value: p, minHeight: 8,
+                          backgroundColor: C.card2),
+                      const SizedBox(height: 8),
+                      Text('Установка ' + (p * 100).round().toString() +
+                          '% • ' + game.seconds.toString() + ' сек.',
+                          style: const TextStyle(color: C.muted)),
+                    ] else
+                      SizedBox(
+                        height: 50,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black,
+                            disabledBackgroundColor: Colors.white.withOpacity(.14),
+                            disabledForegroundColor: C.muted,
                           ),
+                          onPressed: installed ? null : () async {
+                            final ok = await c.install(game);
+                            if (!context.mounted || ok) return;
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('ESP32 не принял Game ID ' +
+                                  game.id.toString()),
+                            ));
+                          },
+                          icon: Icon(installed
+                              ? Icons.check_circle : Icons.download_rounded),
+                          label: Text(installed ? 'Установлено' : 'Скачать',
+                              style: const TextStyle(fontWeight: FontWeight.w900)),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Text('Game ID: ' + game.id.toString() +
+                        ' • команда отправляется на ESP32 при старте установки',
+                        style: const TextStyle(color: C.muted, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 26),
+              const Feature(icon: Icons.sports_esports_rounded,
+                  text: 'Поддерживается контроллер'),
+              const Feature(icon: Icons.download_done_rounded,
+                  text: 'Установка через систему PSR3'),
+              if (game.beta)
+                const Feature(icon: Icons.science_outlined,
+                    text: 'Бета-версия'),
+              const SizedBox(height: 18),
+              const Text('Возрастная категория',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              Row(children: [
+                Container(
+                  width: 92, height: 92, alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE83C2F),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white, width: 5),
                   ),
-              ],
-            ),
+                  child: const Text('13+',
+                      style: TextStyle(fontSize: 33, fontWeight: FontWeight.w900)),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(child: Text(
+                  'Игра предназначена для игроков от 13 лет.',
+                  style: TextStyle(color: C.muted),
+                )),
+              ]),
+              const SizedBox(height: 28),
+              const Text('Описание игры',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                    color: C.card, borderRadius: BorderRadius.circular(16)),
+                child: Text(game.description,
+                    style: const TextStyle(fontSize: 15, height: 1.55)),
+              ),
+            ],
+          )),
+        );
+      },
+    );
+  }
+}
+
+class StoreInfoCard extends StatelessWidget {
+  const StoreInfoCard({super.key});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(15)),
+    child: const Row(children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('PSR3', style: TextStyle(fontWeight: FontWeight.w900)),
+        Text('Версия для PSR3',
+            style: TextStyle(color: C.muted, fontSize: 13)),
+      ]),
+      Spacer(),
+      Icon(Icons.chevron_right_rounded),
+    ]),
+  );
+}
+
+class Feature extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const Feature({super.key, required this.icon, required this.text});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 17),
+    child: Row(children: [
+      SizedBox(width: 62, child: Icon(icon, size: 34)),
+      Expanded(child: Text(text, style: const TextStyle(fontSize: 17))),
+    ]),
+  );
+}
+
+class HeroCard extends StatelessWidget {
+  final Game game;
+  final VoidCallback onTap;
+  const HeroCard({super.key, required this.game, required this.onTap});
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(20),
+    child: Container(
+      height: 250,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF344A64), Color(0xFF17293F), Color(0xFF08111C)],
+        ),
+      ),
+      child: Stack(children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Icon(game.icon, size: 150, color: Colors.white.withOpacity(.13)),
+        ),
+        Align(
+          alignment: Alignment.bottomLeft,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (game.beta) const Badge(
+                backgroundColor: C.blue, label: Text('BETA')),
+              const SizedBox(height: 8),
+              Text(game.name,
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 5),
+              Text(game.subtitle, style: const TextStyle(color: Color(0xFFD1D5DB))),
+            ],
           ),
-        ],
+        ),
+      ]),
+    ),
+  );
+}
+
+class MiniCard extends StatelessWidget {
+  final Game game;
+  final VoidCallback onTap;
+  const MiniCard({super.key, required this.game, required this.onTap});
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: Container(
+      width: 220,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(game.icon, size: 50, color: C.blue),
+        const Spacer(),
+        Text(game.name,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        Text(game.dev, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: C.muted, fontSize: 12)),
+      ]),
+    ),
+  );
+}
+
+class GameTile extends StatelessWidget {
+  final Game game;
+  final PSR3Controller c;
+  final VoidCallback onTap;
+  const GameTile({super.key, required this.game, required this.c, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final installed = c.isInstalled(game.id);
+    final installing = c.isInstalling(game.id);
+    final p = c.progress[game.id] ?? 0;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(15)),
+        child: Row(children: [
+          Container(
+            width: 76, height: 76,
+            decoration: BoxDecoration(color: C.card2,
+                borderRadius: BorderRadius.circular(13)),
+            child: Icon(game.icon, size: 36, color: C.blue),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Flexible(child: Text(game.name,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900))),
+                if (game.beta) ...[
+                  const SizedBox(width: 8),
+                  const Badge(backgroundColor: C.blue, label: Text('BETA')),
+                ],
+              ]),
+              const SizedBox(height: 5),
+              Text(game.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: C.muted, fontSize: 13)),
+              const SizedBox(height: 7),
+              Text(installing
+                      ? 'Установка ' + (p * 100).round().toString() + '%'
+                      : installed ? 'Установлено' : 'Бесплатно • 13+',
+                  style: TextStyle(
+                    color: installing || installed ? C.blue : C.muted,
+                    fontSize: 12, fontWeight: FontWeight.w700,
+                  )),
+            ],
+          )),
+          const Icon(Icons.chevron_right_rounded, color: C.muted),
+        ]),
       ),
     );
   }
+}
+
+class Avatar extends StatelessWidget {
+  final PSR3Controller c;
+  final double size;
+  const Avatar({super.key, required this.c, required this.size});
+  static const gradients = [
+    [Color(0xFF0070D1), Color(0xFF00A4FF)],
+    [Color(0xFF6A35FF), Color(0xFFBD4BFF)],
+    [Color(0xFF0D8F67), Color(0xFF2FD5A0)],
+    [Color(0xFFB34624), Color(0xFFFF8B4A)],
+  ];
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size, height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: LinearGradient(colors: gradients[c.avatar]),
+      border: Border.all(color: Colors.white.withOpacity(.15)),
+    ),
+    child: Icon(Icons.person, size: size * .55),
+  );
+}
+
+class Trophy extends StatelessWidget {
+  final IconData icon;
+  final String value, label;
+  const Trophy({super.key, required this.icon, required this.value, required this.label});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 17, horizontal: 8),
+    decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(15)),
+    child: Column(children: [
+      Icon(icon, color: C.blue),
+      const SizedBox(height: 7),
+      Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+      Text(label, textAlign: TextAlign.center,
+          style: const TextStyle(color: C.muted, fontSize: 12)),
+    ]),
+  );
+}
+
+class Signal extends StatelessWidget {
+  final bool mock;
+  const Signal({super.key, required this.mock});
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: mock ? 'ESP: Mock Mode' : 'ESP32 подключена',
+    child: Row(children: [
+      for (var i = 0; i < 4; i++)
+        Container(
+          width: 4, height: 8.0 + i * 4,
+          margin: const EdgeInsets.only(left: 3),
+          decoration: BoxDecoration(
+            color: i < 3 ? C.blue : C.muted,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+    ]),
+  );
+}
+
+void openGame(BuildContext context, PSR3Controller c, Game g) {
+  Navigator.of(context).push(MaterialPageRoute(
+    builder: (_) => GamePage(c: c, game: g),
+  ));
+}
+
+Future<void> showSettings(BuildContext context, PSR3Controller c) async {
+  final ctl = TextEditingController(text: c.esp);
+  await showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: C.card,
+      title: const Text('Настройки PSR3'),
+      content: SizedBox(
+        width: 430,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Mock Mode'),
+            subtitle: const Text('Тест интерфейса без ESP32',
+                style: TextStyle(color: C.muted)),
+            value: c.mock,
+            onChanged: c.setMock,
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: ctl,
+            decoration: const InputDecoration(
+              labelText: 'Адрес ESP32',
+              hintText: 'http://192.168.4.1',
+              filled: true,
+              fillColor: C.card2,
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена')),
+        FilledButton(onPressed: () {
+          c.setEsp(ctl.text);
+          Navigator.pop(context);
+        }, child: const Text('Сохранить')),
+      ],
+    ),
+  );
+  ctl.dispose();
 }
