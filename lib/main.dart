@@ -23,7 +23,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.1 Beta';
+const appVersionLabel = '0.4.2 Beta';
 const fullReleaseDate = '28 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 
@@ -41,6 +41,7 @@ class Game {
   final String? coverAsset;
   final int sizeMb;
   final String rating;
+  final String dimension;
   final double? priceUah;
   final bool newRelease;
 
@@ -56,6 +57,7 @@ class Game {
     this.coverAsset,
     this.sizeMb = 64,
     this.rating = '',
+    this.dimension = '',
     this.priceUah,
     this.newRelease = false,
   });
@@ -67,27 +69,27 @@ const games = <Game>[
   Game(101, 'Fortnite Online', 'PupgMasterBP + ReGame LAB', '14+ • Beta',
       'Fortnite — это бесплатная и постоянно развивающаяся многопользовательская игра, которая объединяет в себе целую вселенную уникальных развлечений.',
       150, true, Icons.sports_esports_rounded,
-      coverAsset: 'assets/covers/fortnite.svg', sizeMb: 248, rating: '14+'),
+      coverAsset: 'assets/covers/fortnite.svg', sizeMb: 248, rating: '14+', dimension: '3D'),
   Game(102, 'CREATURE', 'ReGame', '15+ • Психологический хоррор',
       'Creature — это леденящий душу психологический хоррор-квест, который проверит вашу выдержку и умение выживать в условиях абсолютной изоляции.\n\nАтмосферный психологический хоррор: визуальный стиль и звуковое сопровождение полностью погружают в виртуальный мир.\n\nТактический геймплей и выживание: управляйте ресурсами, скрывайтесь от преследования и принимайте решения за считанные секунды.\n\nИнтригующие головоломки: изучайте собранные страницы, ищите скрытые ключи и механизмы, чтобы продвигаться вглубь сюжета.',
       180, false, Icons.flashlight_on_rounded,
-      coverAsset: 'assets/covers/creature.svg', sizeMb: 176, rating: '15+'),
+      coverAsset: 'assets/covers/creature.svg', sizeMb: 176, rating: '15+', dimension: '2D'),
   Game(103, 'Minecraft Beta 2D', 'ReGame Studio', '7+ • Beta 2D',
       'Minecraft для PlayStation 3 Remake — это симулятор выживания и песочница, где весь мир состоит из блоков, а единственным ограничением является ваша фантазия.',
       70, true, Icons.grid_view_rounded,
-      coverAsset: 'assets/covers/minecraft_beta.svg', sizeMb: 88, rating: '7+'),
+      coverAsset: 'assets/covers/minecraft_beta.svg', sizeMb: 88, rating: '7+', dimension: '2D'),
   Game(104, 'Terraria', 'ReStation Studio (ReGame LAS)', '12+ • Приключение',
       'Terraria для PlayStation 3 Remake — это уникальное приключение, которое объединяет классические черты экшен-игр со свободой творчества, доступной только в «песочницах». Весь мир игры находится на кончиках ваших пальцев, пока вы сражаетесь за выживание, исследуете недра в поисках богатств или строите собственные города.',
       195, false, Icons.terrain_rounded,
-      coverAsset: 'assets/covers/terraria.svg', sizeMb: 132, rating: '12+'),
+      coverAsset: 'assets/covers/terraria.svg', sizeMb: 132, rating: '12+', dimension: '2D'),
   Game(105, 'GTA beta Digital', 'ReGame Studio • 2025', '18+ • Beta Digital',
       'Это двумерная песочница (2D Top-Down Shooter / Driving) с видом сверху, вдохновлённая классическими частями Grand Theft Auto. Игрок попадает в небольшой открытый город, состоящий из пиксельных блоков или векторных рисунков.',
       0, true, Icons.directions_car_rounded,
-      coverAsset: 'assets/covers/gta_beta.svg', sizeMb: 310, rating: '18+', priceUah: 36.50, newRelease: true),
-  Game(106, 'MP3D Test', 'Android App', 'Minecraft Parkour 3D test game',
-      'Тот самый тестовый паркур PSR3. Небольшая Android-игра для проверки управления, прыжков и игровых возможностей проекта.',
+      coverAsset: 'assets/covers/gta_beta.svg', sizeMb: 310, rating: '18+', dimension: '2D', priceUah: 36.50, newRelease: true),
+  Game(106, 'MP3D Test', 'IdevStuff + ReGame Lab', '7+ • Beta • 3D',
+      'Тест игра Майнкрафт Паркур для теста 3D графики, похоже Idev что-то для нас готовит.',
       50, true, Icons.crop_square_rounded,
-      coverAsset: null, sizeMb: 41),
+      coverAsset: null, sizeMb: 41, rating: '7+', dimension: '3D'),
 ];
 
 class PSR3Controller extends ChangeNotifier {
