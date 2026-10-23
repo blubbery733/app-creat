@@ -7,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'startup_sound.dart';
 
@@ -60,7 +61,24 @@ class Psr3App extends StatelessWidget {
 }
 
 enum ConnectMode { esp32, remotePlay }
-enum MainPage { system, settings }
+enum MainPage { system, store, library, settings }
+
+class PsrGame {
+  final String id;
+  final String title;
+  final String coverAsset;
+
+  const PsrGame(this.id, this.title, this.coverAsset);
+}
+
+const psrGames = <PsrGame>[
+  PsrGame('fortnite', 'Fortnite', 'assets/covers/fortnite.svg'),
+  PsrGame('creature', 'Creature', 'assets/covers/creature.svg'),
+  PsrGame('mp3dtest', 'MP3Dtest', 'assets/covers/mp3dtest.svg'),
+  PsrGame('minecraft_beta', 'Minecraft Beta', 'assets/covers/minecraft_beta.svg'),
+  PsrGame('terraria', 'Terraria', 'assets/covers/terraria.svg'),
+  PsrGame('gta_beta', 'GTA beta', 'assets/covers/gta_beta.svg'),
+];
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -87,6 +105,9 @@ class _HomePageState extends State<HomePage> {
   String consoleError = '—';
   Timer? statusTimer;
   final AudioPlayer remotePlayer = AudioPlayer();
+  final AudioPlayer uiPlayer = AudioPlayer();
+  final Set<String> installedGames = <String>{};
+  final Map<String, double> installProgress = <String, double>{};
   bool remoteSoundPlayed = false;
 
   @override
@@ -101,6 +122,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     statusTimer?.cancel();
     unawaited(remotePlayer.dispose());
+    unawaited(uiPlayer.dispose());
     super.dispose();
   }
 
@@ -350,7 +372,7 @@ class _HomePageState extends State<HomePage> {
     if (status.ok) {
       final statusMode = field(status.data, 'mode').toLowerCase();
       if (statusMode == 'safe' || statusMode == 'safe_mode') {
-        note('Remote Play недоступен в Safe Mode. Используйте «Прямое подключение».');
+        errorNote('Remote Play недоступен в Safe Mode. Используйте «Прямое подключение».');
         return;
       }
     }
@@ -364,7 +386,7 @@ class _HomePageState extends State<HomePage> {
     final paired = await pairRemote(code);
     if (!mounted) return;
     if (!paired) {
-      note('Код подключения не принят консолью.');
+      errorNote('Код подключения не принят консолью.');
       return;
     }
 
@@ -393,7 +415,7 @@ class _HomePageState extends State<HomePage> {
 
     if (!mounted) return;
     if (!result.ok) {
-      note(result.message);
+      errorNote(result.message);
       return;
     }
 
@@ -471,6 +493,7 @@ class _HomePageState extends State<HomePage> {
                 final clean = value.trim();
                 if (!RegExp(r'^\d{4}$').hasMatch(clean)) {
                   setDialogState(() => error = 'Введите ровно 4 цифры');
+                  unawaited(playUiSound('audio/error.mp3'));
                   return;
                 }
                 Navigator.pop(dialogContext, clean);
@@ -492,6 +515,7 @@ class _HomePageState extends State<HomePage> {
                 final value = controller.text.trim();
                 if (!RegExp(r'^\d{4}$').hasMatch(value)) {
                   setDialogState(() => error = 'Введите ровно 4 цифры');
+                  unawaited(playUiSound('audio/error.mp3'));
                   return;
                 }
                 Navigator.pop(dialogContext, value);
@@ -616,6 +640,20 @@ class _HomePageState extends State<HomePage> {
                   if (!safeMode) ...[
                     const SizedBox(height: 8),
                     NavItem(
+                      icon: Icons.storefront_rounded,
+                      label: 'PSR Store',
+                      selected: page == MainPage.store,
+                      onTap: () => setState(() => page = MainPage.store),
+                    ),
+                    const SizedBox(height: 8),
+                    NavItem(
+                      icon: Icons.video_library_rounded,
+                      label: 'Библиотека',
+                      selected: page == MainPage.library,
+                      onTap: () => setState(() => page = MainPage.library),
+                    ),
+                    const SizedBox(height: 8),
+                    NavItem(
                       icon: Icons.settings_rounded,
                       label: 'Настройки',
                       selected: page == MainPage.settings,
@@ -646,9 +684,14 @@ class _HomePageState extends State<HomePage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
-                child: safeMode || page == MainPage.system
+                child: safeMode
                     ? systemPage()
-                    : settingsPage(),
+                    : switch (page) {
+                        MainPage.system => systemPage(),
+                        MainPage.store => storePage(),
+                        MainPage.library => libraryPage(),
+                        MainPage.settings => settingsPage(),
+                      },
               ),
             ),
           ],
@@ -736,6 +779,148 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget storePage() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'PSR Store',
+            style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Игры для PSR3',
+            style: TextStyle(color: muted, fontSize: 15),
+          ),
+          const SizedBox(height: 22),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth < 680
+                  ? (constraints.maxWidth - 14) / 2
+                  : constraints.maxWidth < 980
+                      ? (constraints.maxWidth - 28) / 3
+                      : 220.0;
+              return Wrap(
+                spacing: 14,
+                runSpacing: 18,
+                children: psrGames.map((game) {
+                  final progress = installProgress[game.id];
+                  return SizedBox(
+                    width: cardWidth,
+                    child: PsrGameCard(
+                      game: game,
+                      installed: installedGames.contains(game.id),
+                      progress: progress,
+                      onInstall: () => installGame(game),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget libraryPage() {
+    final games =
+        psrGames.where((game) => installedGames.contains(game.id)).toList();
+
+    if (games.isEmpty) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.sports_esports_rounded,
+                size: 82,
+                color: Colors.white.withValues(alpha: 0.38),
+              ),
+              const SizedBox(height: 22),
+              const Text(
+                'Ваша библиотека игр пуста',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Установленные игры появятся здесь.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: muted),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () => setState(() => page = MainPage.store),
+                child: const Text('Перейти в PSR Store'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Библиотека',
+            style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 22),
+          Wrap(
+            spacing: 14,
+            runSpacing: 18,
+            children: games
+                .map(
+                  (game) => SizedBox(
+                    width: 220,
+                    child: PsrGameCard(
+                      game: game,
+                      installed: true,
+                      progress: null,
+                      onInstall: null,
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> installGame(PsrGame game) async {
+    if (installedGames.contains(game.id) ||
+        installProgress.containsKey(game.id)) {
+      return;
+    }
+
+    await playUiSound('audio/install.mp3');
+    if (!mounted) return;
+    setState(() => installProgress[game.id] = 0);
+
+    for (var step = 1; step <= 20; step++) {
+      await Future<void>.delayed(const Duration(milliseconds: 85));
+      if (!mounted) return;
+      setState(() => installProgress[game.id] = step / 20);
+    }
+
+    setState(() {
+      installProgress.remove(game.id);
+      installedGames.add(game.id);
+    });
+
+    await playUiSound('audio/notification.mp3');
+    if (mounted) {
+      note('${game.title} установлена и добавлена в библиотеку');
+    }
+  }
+
   Widget settingsPage() {
     if (safeMode) return systemPage();
 
@@ -796,7 +981,7 @@ class _HomePageState extends State<HomePage> {
         connected = false;
         pingMs = null;
       });
-      if (!silent) note(result.message);
+      if (!silent) errorNote(result.message);
       return;
     }
 
@@ -856,7 +1041,7 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       remoteSoundPlayed = false;
       if (mounted) {
-        note('Не удалось воспроизвести звук Remote Play: $e');
+        errorNote('Не удалось воспроизвести звук Remote Play: $e');
       }
     }
   }
@@ -867,7 +1052,7 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
 
     if (!modeResult.ok) {
-      note(modeResult.message);
+      errorNote(modeResult.message);
       return;
     }
 
@@ -919,7 +1104,7 @@ class _HomePageState extends State<HomePage> {
     if (result.ok) {
       note('Прошивка отправлена. Консоль находится в Update Mode.');
     } else {
-      note(result.message);
+      errorNote(result.message);
     }
   }
 
@@ -981,7 +1166,11 @@ class _HomePageState extends State<HomePage> {
   Future<void> postCommand(String path) async {
     final result = await postJson(path, const <String, dynamic>{});
     if (!mounted) return;
-    note(result.ok ? 'Команда отправлена' : result.message);
+    if (result.ok) {
+      note('Команда отправлена');
+    } else {
+      errorNote(result.message);
+    }
   }
 
   Future<ApiResult> getJson(String path) async {
@@ -1111,9 +1300,112 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> playUiSound(String assetPath) async {
+    try {
+      await uiPlayer.stop();
+      await uiPlayer.setReleaseMode(ReleaseMode.stop);
+      await uiPlayer.play(AssetSource(assetPath));
+    } catch (_) {
+      // UI sounds must never break the app's main action.
+    }
+  }
+
+  void errorNote(String message) {
+    unawaited(playUiSound('audio/error.mp3'));
+    note(message);
+  }
+
   void note(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+}
+
+class PsrGameCard extends StatelessWidget {
+  final PsrGame game;
+  final bool installed;
+  final double? progress;
+  final VoidCallback? onInstall;
+
+  const PsrGameCard({
+    super.key,
+    required this.game,
+    required this.installed,
+    required this.progress,
+    required this.onInstall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final installing = progress != null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AspectRatio(
+            aspectRatio: 1.18,
+            child: Container(
+              color: const Color(0xFF0B0E0C),
+              child: SvgPicture.asset(
+                game.coverAsset,
+                fit: BoxFit.cover,
+                placeholderBuilder: (_) => const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  game.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (installing) ...[
+                  LinearProgressIndicator(value: progress),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${((progress ?? 0) * 100).round()}%',
+                    style: const TextStyle(color: muted, fontSize: 12),
+                  ),
+                ] else if (installed)
+                  const Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded, size: 18, color: greenSoft),
+                      SizedBox(width: 7),
+                      Text('Установлено', style: TextStyle(color: greenSoft)),
+                    ],
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: onInstall,
+                      child: const Text('Установить'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
