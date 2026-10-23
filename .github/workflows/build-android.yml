@@ -1,0 +1,64 @@
+name: Build PSR3 Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: psr3-android-main
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android runner
+        shell: bash
+        run: |
+          flutter config --enable-android
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android .
+          fi
+          sed -i 's/android:label="psr3_app"/android:label="PSR3"/' android/app/src/main/AndroidManifest.xml
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        shell: bash
+        run: cp build/app/outputs/flutter-apk/app-release.apk PSR3.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSR3-Android-APK
+          path: PSR3.apk
+          if-no-files-found: error
+          retention-days: 14
