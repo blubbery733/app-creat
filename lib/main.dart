@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -9,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'backseat_cover.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +27,6 @@ class C {
 const appVersionLabel = '0.4.4 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
-final backSeatCoverBytes = base64Decode(backSeatCoverBase64);
 
 Color usageColor(double value) {
   if (value < 0.35) return const Color(0xFF2E9B67);
@@ -268,7 +265,7 @@ class PSR3Controller extends ChangeNotifier {
         audioBoost.stop(),
       ]);
       await audio.setVolume(1.0);
-      await audioBoost.setVolume(0.85);
+      await audioBoost.setVolume(1.0);
       final source = AssetSource('audio/' + file);
       await Future.wait([
         audio.play(source),
@@ -763,8 +760,8 @@ class _ShellState extends State<Shell> {
 
     pageController.animateToPage(
       value,
-      duration: const Duration(milliseconds: 340),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeInOutCubic,
     );
   }
 
@@ -1449,24 +1446,27 @@ class GamePage extends StatelessWidget {
                       ),
                     ),
                   ),
-                const SizedBox(height: 26),
-                const SectionTitle(
-                  icon: Icons.description_rounded,
-                  title: 'Описание игры',
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: C.card,
-                    borderRadius: BorderRadius.circular(16),
+                if (game.id != 107) ...[
+                  const SizedBox(height: 26),
+                  const SectionTitle(
+                    icon: Icons.description_rounded,
+                    title: 'Описание игры',
                   ),
-                  child: Text(
-                    game.description,
-                    style: const TextStyle(fontSize: 15, height: 1.5),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: C.card,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      game.description,
+                      style: const TextStyle(fontSize: 15, height: 1.5),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 18),
+                  const SizedBox(height: 18),
+                ] else
+                  const SizedBox(height: 26),
                 const Feature(
                   icon: Icons.desktop_windows_rounded,
                   text: 'Поддерживается дистанционная игра в приложении PSR3 для Windows.',
@@ -1494,8 +1494,8 @@ class GameArtwork extends StatelessWidget {
     if (game.id == 107) {
       return ColoredBox(
         color: C.card2,
-        child: Image.memory(
-          backSeatCoverBytes,
+        child: Image.asset(
+          'assets/covers/backseat.jpg',
           fit: BoxFit.cover,
           gaplessPlayback: true,
         ),
