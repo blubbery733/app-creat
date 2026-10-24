@@ -25,7 +25,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.6 Beta';
+const appVersionLabel = '0.4.7 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 const espBaseUrl = 'http://192.168.4.1';
@@ -185,6 +185,7 @@ class PSR3Controller extends ChangeNotifier {
   int? espFreeHeap;
   int? espLargestBlock;
   int? espWifiRssi;
+  int? espPingMs;
   int espStorageUsedMb = 0;
   int espStorageTotalMb = 2048;
 
@@ -322,7 +323,10 @@ class PSR3Controller extends ChangeNotifier {
     espPollBusy = true;
 
     try {
+      final pingWatch = Stopwatch()..start();
       final data = await _espRequest('GET', '/api/status');
+      pingWatch.stop();
+      espPingMs = pingWatch.elapsedMilliseconds;
 
       if (data['ok'] != true) {
         throw const FormatException('ESP32 returned ok=false');
@@ -366,6 +370,7 @@ class PSR3Controller extends ChangeNotifier {
     } catch (e) {
       espConnected = false;
       signalBars = 0;
+      espPingMs = null;
       espLastError = e.toString();
 
       if (!quiet) {
@@ -529,10 +534,66 @@ class PSR3Controller extends ChangeNotifier {
     }
 
     await pollEspStatus(quiet: true);
+    if (!espConnected) {
+      await playSound('error.mp3');
+      return false;
+    }
     if (isInstalled(game.id)) {
       await playSound('error.mp3');
       return false;
     }
+
+    // Confirm the install with ESP32 BEFORE showing the long progress animation.
+    // This prevents the old "100% -> error" behavior.
+    Map<String, dynamic>? installReply;
+    try {
+      installReply = await _espRequest(
+        'POST',
+        '/api/game/install',
+        body: <String, dynamic>{
+          'gameId': game.id,
+          'gameName': game.name,
+          'sizeMb': game.sizeMb,
+        },
+      );
+    } catch (_) {
+      // Compatibility with older PSR3 firmware.
+      try {
+        installReply = await _espRequest(
+          'POST',
+          '/game?id=' +
+              game.id.toString() +
+              '&name=' +
+              Uri.encodeComponent(game.name),
+          body: <String, dynamic>{
+            'gameId': game.id,
+            'gameName': game.name,
+          },
+        );
+      } catch (e) {
+        espLastError = e.toString();
+        await playSound('error.mp3');
+        notifyListeners();
+        return false;
+      }
+    }
+
+    final accepted = installReply['ok'] == true &&
+        (installReply['installed'] == true ||
+            installReply['accepted'] == true ||
+            installReply['gameId'] == game.id);
+
+    if (!accepted) {
+      espLastError = 'ESP32 rejected install';
+      await playSound('error.mp3');
+      notifyListeners();
+      return false;
+    }
+
+    installed.add(game.id);
+    final remoteUsed = (installReply['storage_used_mb'] as num?)?.toInt();
+    if (remoteUsed != null) espStorageUsedMb = remoteUsed;
+    await saveInstalled();
 
     await playSound('install.mp3');
     progress[game.id] = 0;
@@ -551,39 +612,13 @@ class PSR3Controller extends ChangeNotifier {
         if (value >= 1) {
           timer.cancel();
           timers.remove(game.id);
-
-          try {
-            final data = await _espRequest(
-              'POST',
-              '/api/game/install',
-              body: <String, dynamic>{
-                'gameId': game.id,
-                'gameName': game.name,
-                'sizeMb': game.sizeMb,
-              },
-            );
-
-            if (data['ok'] != true || data['installed'] != true) {
-              throw const FormatException('ESP32 rejected install');
-            }
-
-            installed.add(game.id);
-            espStorageUsedMb =
-                (data['storage_used_mb'] as num?)?.toInt() ?? installedSizeMb;
-            lastInstalledGameId = game.id;
-            await saveInstalled();
-            await playSound('notification.mp3');
-            unawaited(pollEspStatus(quiet: true));
-          } catch (e) {
-            espLastError = e.toString();
-            await playSound('error.mp3');
-          } finally {
-            progress.remove(game.id);
-            notifyListeners();
-          }
-        } else {
-          notifyListeners();
+          progress.remove(game.id);
+          lastInstalledGameId = game.id;
+          await playSound('notification.mp3');
+          unawaited(pollEspStatus(quiet: true));
         }
+
+        notifyListeners();
       },
     );
 
@@ -1253,7 +1288,9 @@ class HomePage extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      controller.espConnected ? 'Online' : 'Offline',
+                      controller.espConnected
+                          ? 'Online • ${controller.espPingMs ?? '—'} ms'
+                          : 'Offline',
                       style: TextStyle(
                         color: controller.espConnected ? C.accent : C.muted,
                         fontSize: 13,
