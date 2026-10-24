@@ -60,6 +60,7 @@ bool initBuzzerPwm() {
 
 void setFanPercent(uint8_t percent) {
   if (percent > 100) percent = 100;
+  currentFanPercent = percent;
   uint32_t duty = map(percent, 0, 100, 0, 255);
   if (FAN_PWM_INVERTED) duty = 255 - duty;
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -168,9 +169,11 @@ void startPSR3() {
 
   // Red -> green + yellow immediately.
   setLeds(false, true, true);
-  setPsu(true);
-  delay(250);
 
+  // Start the 25 kHz fan PWM immediately after the 12 V rail is enabled.
+  // Using a real PWM duty (not 100% constant HIGH) makes startup more reliable
+  // for the original PS3 3-wire fan controller.
+  setPsu(true);
   setFanPercent(FAN_BOOT_PERCENT);
   delay(FAN_BOOST_MS);
   setFanPercent(FAN_IDLE_PERCENT);
