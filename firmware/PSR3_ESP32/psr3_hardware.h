@@ -119,6 +119,8 @@ void handlePowerPress() {
 }
 
 void updatePowerButton() {
+  if (millis() < powerInputReadyAtMs) return;
+
   const bool raw = readPowerSensor();
 
   if (raw != lastRawButton) {
@@ -128,12 +130,17 @@ void updatePowerButton() {
 
   if ((millis() - lastButtonChangeMs) >= DEBOUNCE_MS && raw != stableButton) {
     stableButton = raw;
-    if (stableButton) {
-      handlePowerPress();
-    } else {
+
+    if (!stableButton) {
+      // A real release arms the next press. This prevents a noisy/high input
+      // during boot from switching the PSU on by itself.
+      powerButtonArmed = true;
       powerPressStartedMs = 0;
       holdDoubleBeepSent = false;
       holdBeepArmed = false;
+    } else if (powerButtonArmed) {
+      powerButtonArmed = false;
+      handlePowerPress();
     }
   }
 
