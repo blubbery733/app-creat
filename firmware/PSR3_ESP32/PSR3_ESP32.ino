@@ -1,5 +1,5 @@
 /*
-  PSR3 ESP32 Firmware v0.5.0-dev
+  PSR3 ESP32 Firmware v0.5.3-dev
   Target: classic ESP32 / Arduino-ESP32 2.x or 3.x
 
   Wi-Fi AP:
@@ -32,7 +32,7 @@ void setup() {
   pinMode(PIN_LED_RED, OUTPUT);
   pinMode(PIN_LED_GREEN, OUTPUT);
   pinMode(PIN_LED_YELLOW, OUTPUT);
-  pinMode(PIN_TOUCH_POWER, INPUT);
+  pinMode(PIN_TOUCH_POWER, INPUT_PULLDOWN);
 
   if (PSU_CONTROL_ENABLED) {
     pinMode(PIN_PSU_ON, OUTPUT);
@@ -58,6 +58,13 @@ void setup() {
   }
 
   startNetwork();
+
+  // Ignore the touch input briefly after boot and require a real release
+  // before the first accepted press.
+  lastRawButton = readPowerSensor();
+  stableButton = lastRawButton;
+  powerButtonArmed = !stableButton;
+  powerInputReadyAtMs = millis() + 1800;
 
   Serial.println();
   Serial.print("[PSR3] Firmware ");
