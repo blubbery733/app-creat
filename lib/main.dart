@@ -578,10 +578,11 @@ class PSR3Controller extends ChangeNotifier {
       }
     }
 
-    final accepted = installReply['ok'] == true &&
-        (installReply['installed'] == true ||
-            installReply['accepted'] == true ||
-            installReply['gameId'] == game.id);
+    final reply = installReply ?? const <String, dynamic>{};
+    final accepted = reply['ok'] == true &&
+        (reply['installed'] == true ||
+            reply['accepted'] == true ||
+            reply['gameId'] == game.id);
 
     if (!accepted) {
       espLastError = 'ESP32 rejected install';
@@ -591,7 +592,7 @@ class PSR3Controller extends ChangeNotifier {
     }
 
     installed.add(game.id);
-    final remoteUsed = (installReply['storage_used_mb'] as num?)?.toInt();
+    final remoteUsed = (reply['storage_used_mb'] as num?)?.toInt();
     if (remoteUsed != null) espStorageUsedMb = remoteUsed;
     await saveInstalled();
 
