@@ -11,7 +11,7 @@
 #define ESP_ARDUINO_VERSION_MAJOR 2
 #endif
 
-constexpr char FW_VERSION[] = "0.5.0-dev";
+constexpr char FW_VERSION[] = "0.5.1-dev";
 constexpr char AP_SSID[] = "PSR3";
 constexpr char AP_PASSWORD[] = "psr3update";
 
@@ -33,7 +33,7 @@ constexpr bool PAIRING_COMPAT_ACCEPT_ANY_4_DIGIT = true;
 constexpr char PAIRING_CODE[] = "0000";
 
 constexpr uint32_t DEBOUNCE_MS       = 45;
-constexpr uint32_t FAN_BOOST_MS      = 1000;
+constexpr uint32_t FAN_BOOST_MS      = 1500;
 constexpr uint32_t STATUS_PERIOD_MS  = 2000;
 constexpr uint32_t POWER_HOLD_MS     = 5000;
 constexpr uint32_t HTTP_TIMEOUT_MS   = 5000;
@@ -41,8 +41,8 @@ constexpr uint32_t UPDATE_TIMEOUT_MS = 30000;
 
 constexpr uint32_t FAN_PWM_FREQ = 25000;
 constexpr uint8_t FAN_PWM_BITS = 8;
-constexpr uint8_t FAN_BOOT_PERCENT = 100;
-constexpr uint8_t FAN_IDLE_PERCENT = 30;
+constexpr uint8_t FAN_BOOT_PERCENT = 55;
+constexpr uint8_t FAN_IDLE_PERCENT = 40;
 constexpr uint8_t FAN_PWM_CHANNEL = 0;
 constexpr uint8_t BUZZER_CHANNEL = 1;
 
@@ -82,5 +82,6 @@ uint32_t powerPressStartedMs = 0;
 bool holdDoubleBeepSent = false;
 bool holdBeepArmed = false;
 uint32_t lastStatusMs = 0;
+uint8_t currentFanPercent = 0;
 
 String installedGamesCsv;
