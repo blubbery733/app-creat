@@ -256,6 +256,7 @@ String statusJson() {
   json += ",\"paired\":";
   json += remotePaired ? "true" : "false";
   json += ",\"clients\":" + String(WiFi.softAPgetStationNum());
+  json += ",\"fan_percent\":" + String(currentFanPercent);
   json += ",\"installed_games\":" + installedGamesJsonArray();
   json += ",\"storage_used_mb\":" + String(installedStorageMb());
   json += ",\"storage_total_mb\":" + String(STORAGE_TOTAL_MB);
