@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -27,6 +28,7 @@ class C {
 const appVersionLabel = '0.4.4 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
+const espBaseUrl = 'http://192.168.4.1';
 
 Color usageColor(double value) {
   if (value < 0.35) return const Color(0xFF2E9B67);
@@ -169,6 +171,19 @@ class PSR3Controller extends ChangeNotifier {
   final AudioPlayer audio = AudioPlayer();
   final AudioPlayer audioBoost = AudioPlayer();
   final ImagePicker picker = ImagePicker();
+  final HttpClient http = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 2);
+
+  Timer? espPollTimer;
+  bool espConnected = false;
+  bool espCommandBusy = false;
+  String espFirmware = '—';
+  String espIp = '192.168.4.1';
+  String? espLastError;
+  String? espCommandMessage;
+  int? espFreeHeap;
+  int? espLargestBlock;
+  int? espWifiRssi;
 
   PSR3Controller() {
     unawaited(loadSavedState());
@@ -225,6 +240,12 @@ class PSR3Controller extends ChangeNotifier {
 
     stage = signedIn ? Stage.ready : Stage.connect;
     stateLoaded = true;
+
+    if (signedIn) {
+      startEspPolling();
+      unawaited(pollEspStatus(quiet: true));
+    }
+
     notifyListeners();
   }
 
@@ -236,6 +257,99 @@ class PSR3Controller extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> _espRequest(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final uri = Uri.parse(espBaseUrl + path);
+    final HttpClientRequest request;
+
+    if (method == 'POST') {
+      request = await http.postUrl(uri);
+    } else {
+      request = await http.getUrl(uri);
+    }
+
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+
+    if (body != null) {
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode(body));
+    }
+
+    final response =
+        await request.close().timeout(const Duration(seconds: 3));
+    final raw = await utf8.decoder.bind(response).join();
+
+    Map<String, dynamic> data = <String, dynamic>{};
+    if (raw.trim().isNotEmpty) {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        data = Map<String, dynamic>.from(decoded);
+      }
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        'ESP32 HTTP ' + response.statusCode.toString(),
+        uri: uri,
+      );
+    }
+
+    return data;
+  }
+
+  int _signalBarsFromRssi(int? rssi) {
+    if (rssi == null) return 0;
+    if (rssi >= -55) return 4;
+    if (rssi >= -67) return 3;
+    if (rssi >= -75) return 2;
+    return 1;
+  }
+
+  Future<bool> pollEspStatus({bool quiet = false}) async {
+    try {
+      final data = await _espRequest('GET', '/api/status');
+
+      if (data['ok'] != true) {
+        throw const FormatException('ESP32 returned ok=false');
+      }
+
+      espConnected = true;
+      espFirmware = data['firmware']?.toString() ?? '—';
+      espIp = data['ip']?.toString() ?? '192.168.4.1';
+      espFreeHeap = (data['free_heap'] as num?)?.toInt();
+      espLargestBlock = (data['largest_block'] as num?)?.toInt();
+      espWifiRssi = (data['wifi_rssi'] as num?)?.toInt();
+      signalBars = _signalBarsFromRssi(espWifiRssi);
+      espLastError = null;
+      error = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      espConnected = false;
+      signalBars = 0;
+      espLastError = e.toString();
+
+      if (!quiet) {
+        error =
+            'PSR3 не отвечает. Подключись к Wi-Fi сети PSR3 и попробуй ещё раз.';
+      }
+
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void startEspPolling() {
+    espPollTimer?.cancel();
+    espPollTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(pollEspStatus(quiet: true)),
+    );
+  }
+
   Future<void> connect() async {
     if (connecting) return;
 
@@ -243,19 +357,105 @@ class PSR3Controller extends ChangeNotifier {
     error = null;
     notifyListeners();
 
-    await Future<void>.delayed(const Duration(seconds: 4));
+    final connected = await pollEspStatus();
 
     connecting = false;
+    if (!connected) {
+      notifyListeners();
+      return;
+    }
+
     stage = Stage.ready;
-    signalBars = 3;
     hasEverLoggedIn = true;
     signedIn = true;
+    startEspPolling();
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('has_ever_logged_in', true);
     await prefs.setBool('signed_in', true);
 
     notifyListeners();
+  }
+
+  Future<bool> pairRemote(String code) async {
+    final normalized = code.trim();
+    if (!RegExp(r'^\d{4}$').hasMatch(normalized)) {
+      espCommandMessage = 'Код должен состоять из 4 цифр.';
+      notifyListeners();
+      return false;
+    }
+
+    espCommandBusy = true;
+    espCommandMessage = null;
+    notifyListeners();
+
+    try {
+      final data = await _espRequest(
+        'POST',
+        '/api/remote/pair',
+        body: <String, dynamic>{'code': normalized},
+      );
+      final ok = data['ok'] == true && data['paired'] == true;
+      espCommandMessage =
+          ok ? 'Remote Play: код принят ESP32.' : 'ESP32 отклонила код.';
+      return ok;
+    } catch (e) {
+      espCommandMessage = 'Не удалось отправить код на ESP32.';
+      espLastError = e.toString();
+      return false;
+    } finally {
+      espCommandBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> enterUpdateMode() async {
+    espCommandBusy = true;
+    espCommandMessage = null;
+    notifyListeners();
+
+    try {
+      final data = await _espRequest('POST', '/api/update-mode');
+      final ok = data['ok'] == true;
+      espCommandMessage = ok
+          ? 'ESP32 приняла команду Update Mode: ' +
+              (data['mode']?.toString() ?? 'ok')
+          : 'ESP32 отклонила Update Mode.';
+      return ok;
+    } catch (e) {
+      espCommandMessage = 'Не удалось включить Update Mode.';
+      espLastError = e.toString();
+      return false;
+    } finally {
+      espCommandBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> restartEsp() async {
+    espCommandBusy = true;
+    espCommandMessage = null;
+    notifyListeners();
+
+    try {
+      final data = await _espRequest('POST', '/api/restart');
+      final ok = data['ok'] == true;
+      if (ok) {
+        espConnected = false;
+        signalBars = 0;
+        espCommandMessage = 'ESP32 перезагружается…';
+      } else {
+        espCommandMessage = 'ESP32 отклонила перезагрузку.';
+      }
+      return ok;
+    } catch (e) {
+      espCommandMessage = 'Не удалось отправить команду перезагрузки.';
+      espLastError = e.toString();
+      return false;
+    } finally {
+      espCommandBusy = false;
+      notifyListeners();
+    }
   }
 
   Future<void> playSound(String file) async {
@@ -364,9 +564,13 @@ class PSR3Controller extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    espPollTimer?.cancel();
+    espPollTimer = null;
     connecting = false;
     error = null;
     signedIn = false;
+    espConnected = false;
+    signalBars = 0;
     stage = Stage.connect;
 
     final prefs = await SharedPreferences.getInstance();
@@ -405,6 +609,8 @@ class PSR3Controller extends ChangeNotifier {
     for (final timer in removalTimers.values) {
       timer.cancel();
     }
+    espPollTimer?.cancel();
+    http.close(force: true);
     unawaited(audio.dispose());
     unawaited(audioBoost.dispose());
     super.dispose();
@@ -667,6 +873,17 @@ class ConnectPage extends StatelessWidget {
                         ),
                       ),
                     ),
+                  if (controller.error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      controller.error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFFFF7777),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -920,11 +1137,26 @@ class HomePage extends StatelessWidget {
             children: [
               AvatarView(controller: controller, size: 48),
               const SizedBox(width: 12),
-              const Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Максим Волошин', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-                  Text('Online', style: TextStyle(color: C.muted, fontSize: 13)),
-                ]),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Максим Волошин',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      controller.espConnected ? 'Online • ESP32' : 'Offline • ESP32',
+                      style: TextStyle(
+                        color: controller.espConnected ? C.accent : C.muted,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               Signal(controller: controller),
               IconButton(
@@ -2002,60 +2234,220 @@ Future<void> showSettings(
   BuildContext context,
   PSR3Controller controller,
 ) async {
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: C.card,
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(children: [
-              Icon(Icons.settings_rounded, color: Colors.white),
-              SizedBox(width: 10),
-              Text('Настройки', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
-            ]),
-            const SizedBox(height: 20),
-            const _SettingInfo(
-              icon: Icons.info_outline_rounded,
-              title: 'Версия приложения',
-              value: appVersionLabel,
-            ),
-            const SizedBox(height: 10),
-            const _SettingInfo(
-              icon: Icons.calendar_month_rounded,
-              title: 'Полный релиз',
-              value: fullReleaseDate,
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFFF7777),
-                  side: const BorderSide(color: Color(0xFF7D3434)),
+  final pairController = TextEditingController();
+
+  try {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.card,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: .86,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, __) => SafeArea(
+            top: false,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.settings_rounded, color: Colors.white),
+                    SizedBox(width: 10),
+                    Text(
+                      'Настройки',
+                      style: TextStyle(
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
                 ),
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  controller.logout();
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text(
-                  'Выйти из аккаунта',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: C.card2,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: controller.espConnected
+                          ? C.accent.withOpacity(.55)
+                          : C.border,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            controller.espConnected
+                                ? Icons.link_rounded
+                                : Icons.link_off_rounded,
+                            color: controller.espConnected
+                                ? C.accent
+                                : C.muted,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              controller.espConnected
+                                  ? 'ESP32 подключена'
+                                  : 'ESP32 не отвечает',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Обновить',
+                            onPressed: controller.espCommandBusy
+                                ? null
+                                : () => controller.pollEspStatus(),
+                            icon: const Icon(Icons.refresh_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'IP: ' + controller.espIp,
+                        style: const TextStyle(color: C.muted),
+                      ),
+                      Text(
+                        'Прошивка: ' + controller.espFirmware,
+                        style: const TextStyle(color: C.muted),
+                      ),
+                      Text(
+                        'Free heap: ' +
+                            (controller.espFreeHeap?.toString() ?? '—') +
+                            ' B',
+                        style: const TextStyle(color: C.muted),
+                      ),
+                      Text(
+                        'Largest block: ' +
+                            (controller.espLargestBlock?.toString() ?? '—') +
+                            ' B',
+                        style: const TextStyle(color: C.muted),
+                      ),
+                      Text(
+                        'Wi-Fi RSSI: ' +
+                            (controller.espWifiRssi?.toString() ?? '—') +
+                            ' dBm',
+                        style: const TextStyle(color: C.muted),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: pairController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Код Remote Play',
+                    hintText: '4 цифры',
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: controller.espCommandBusy
+                            ? null
+                            : () => controller.pairRemote(pairController.text),
+                        icon: const Icon(Icons.link_rounded),
+                        label: const Text('Отправить код'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: controller.espCommandBusy
+                            ? null
+                            : controller.enterUpdateMode,
+                        icon: const Icon(Icons.system_update_alt_rounded),
+                        label: const Text('Update Mode'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFFB16E),
+                      side: const BorderSide(color: Color(0xFF7A5334)),
+                    ),
+                    onPressed:
+                        controller.espCommandBusy ? null : controller.restartEsp,
+                    icon: const Icon(Icons.restart_alt_rounded),
+                    label: const Text(
+                      'Перезагрузить ESP32',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                if (controller.espCommandBusy) ...[
+                  const SizedBox(height: 12),
+                  const LinearProgressIndicator(minHeight: 3),
+                ],
+                if (controller.espCommandMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    controller.espCommandMessage!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                const _SettingInfo(
+                  icon: Icons.info_outline_rounded,
+                  title: 'Версия приложения',
+                  value: appVersionLabel,
+                ),
+                const SizedBox(height: 10),
+                const _SettingInfo(
+                  icon: Icons.calendar_month_rounded,
+                  title: 'Полный релиз',
+                  value: fullReleaseDate,
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFF7777),
+                      side: const BorderSide(color: Color(0xFF7D3434)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      controller.logout();
+                    },
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text(
+                      'Выйти из аккаунта',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  } finally {
+    pairController.dispose();
+  }
 }
 
 class _SettingInfo extends StatelessWidget {
