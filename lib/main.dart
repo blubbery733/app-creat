@@ -25,7 +25,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.4 Beta';
+const appVersionLabel = '0.4.5 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 const espBaseUrl = 'http://192.168.4.1';
@@ -301,7 +301,7 @@ class PSR3Controller extends ChangeNotifier {
   }
 
   int _signalBarsFromRssi(int? rssi) {
-    if (rssi == null) return 0;
+    if (rssi == null) return espConnected ? 1 : 0;
     if (rssi >= -55) return 4;
     if (rssi >= -67) return 3;
     if (rssi >= -75) return 2;
@@ -1149,7 +1149,7 @@ class HomePage extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      controller.espConnected ? 'Online • ESP32' : 'Offline • ESP32',
+                      controller.espConnected ? 'Online' : 'Offline',
                       style: TextStyle(
                         color: controller.espConnected ? C.accent : C.muted,
                         fontSize: 13,
@@ -1381,7 +1381,7 @@ class ProfilePage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16)),
             child: Row(children: [
-              Container(width: 11, height: 11, decoration: BoxDecoration(shape: BoxShape.circle, color: controller.signalColor)),
+              Container(width: 11, height: 11, decoration: BoxDecoration(shape: BoxShape.circle, color: controller.espConnected ? C.accent : const Color(0xFFE64C4C))),
               const SizedBox(width: 10),
               const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('PSR3', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
@@ -2234,220 +2234,68 @@ Future<void> showSettings(
   BuildContext context,
   PSR3Controller controller,
 ) async {
-  final pairController = TextEditingController();
-
-  try {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: C.card,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: .86,
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, __) => SafeArea(
-            top: false,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: C.card,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => FractionallySizedBox(
+      heightFactor: .62,
+      child: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
+          children: [
+            const Row(
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.settings_rounded, color: Colors.white),
-                    SizedBox(width: 10),
-                    Text(
-                      'Настройки',
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: C.card2,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: controller.espConnected
-                          ? C.accent.withOpacity(.55)
-                          : C.border,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            controller.espConnected
-                                ? Icons.link_rounded
-                                : Icons.link_off_rounded,
-                            color: controller.espConnected
-                                ? C.accent
-                                : C.muted,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              controller.espConnected
-                                  ? 'ESP32 подключена'
-                                  : 'ESP32 не отвечает',
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Обновить',
-                            onPressed: controller.espCommandBusy
-                                ? null
-                                : () => controller.pollEspStatus(),
-                            icon: const Icon(Icons.refresh_rounded),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'IP: ' + controller.espIp,
-                        style: const TextStyle(color: C.muted),
-                      ),
-                      Text(
-                        'Прошивка: ' + controller.espFirmware,
-                        style: const TextStyle(color: C.muted),
-                      ),
-                      Text(
-                        'Free heap: ' +
-                            (controller.espFreeHeap?.toString() ?? '—') +
-                            ' B',
-                        style: const TextStyle(color: C.muted),
-                      ),
-                      Text(
-                        'Largest block: ' +
-                            (controller.espLargestBlock?.toString() ?? '—') +
-                            ' B',
-                        style: const TextStyle(color: C.muted),
-                      ),
-                      Text(
-                        'Wi-Fi RSSI: ' +
-                            (controller.espWifiRssi?.toString() ?? '—') +
-                            ' dBm',
-                        style: const TextStyle(color: C.muted),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: pairController,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Код Remote Play',
-                    hintText: '4 цифры',
-                    border: OutlineInputBorder(),
-                    counterText: '',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: controller.espCommandBusy
-                            ? null
-                            : () => controller.pairRemote(pairController.text),
-                        icon: const Icon(Icons.link_rounded),
-                        label: const Text('Отправить код'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: controller.espCommandBusy
-                            ? null
-                            : controller.enterUpdateMode,
-                        icon: const Icon(Icons.system_update_alt_rounded),
-                        label: const Text('Update Mode'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFFFB16E),
-                      side: const BorderSide(color: Color(0xFF7A5334)),
-                    ),
-                    onPressed:
-                        controller.espCommandBusy ? null : controller.restartEsp,
-                    icon: const Icon(Icons.restart_alt_rounded),
-                    label: const Text(
-                      'Перезагрузить ESP32',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ),
-                if (controller.espCommandBusy) ...[
-                  const SizedBox(height: 12),
-                  const LinearProgressIndicator(minHeight: 3),
-                ],
-                if (controller.espCommandMessage != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    controller.espCommandMessage!,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                const _SettingInfo(
-                  icon: Icons.info_outline_rounded,
-                  title: 'Версия приложения',
-                  value: appVersionLabel,
-                ),
-                const SizedBox(height: 10),
-                const _SettingInfo(
-                  icon: Icons.calendar_month_rounded,
-                  title: 'Полный релиз',
-                  value: fullReleaseDate,
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFFF7777),
-                      side: const BorderSide(color: Color(0xFF7D3434)),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      controller.logout();
-                    },
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text(
-                      'Выйти из аккаунта',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
+                Icon(Icons.settings_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Text(
+                  'Настройки',
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 18),
+            const _SettingInfo(
+              icon: Icons.info_outline_rounded,
+              title: 'Версия приложения',
+              value: appVersionLabel,
+            ),
+            const SizedBox(height: 10),
+            const _SettingInfo(
+              icon: Icons.calendar_month_rounded,
+              title: 'Полный релиз',
+              value: fullReleaseDate,
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF7777),
+                  side: const BorderSide(color: Color(0xFF7D3434)),
+                ),
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  controller.logout();
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text(
+                  'Выйти из аккаунта',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-    );
-  } finally {
-    pairController.dispose();
-  }
+    ),
+  );
 }
 
 class _SettingInfo extends StatelessWidget {
