@@ -25,7 +25,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.7 Beta';
+const appVersionLabel = '0.4.8 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 const espBaseUrl = 'http://192.168.4.1';
@@ -170,6 +170,8 @@ class PSR3Controller extends ChangeNotifier {
   final removalTimers = <int, Timer>{};
   final AudioPlayer audio = AudioPlayer();
   final AudioPlayer audioBoost = AudioPlayer();
+  final AudioPlayer audioBoost2 = AudioPlayer();
+  final AudioPlayer audioBoost3 = AudioPlayer();
   final ImagePicker picker = ImagePicker();
   final HttpClient http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 2);
@@ -310,11 +312,11 @@ class PSR3Controller extends ChangeNotifier {
     return data;
   }
 
-  int _signalBarsFromRssi(int? rssi) {
-    if (rssi == null) return espConnected ? 1 : 0;
-    if (rssi >= -55) return 4;
-    if (rssi >= -67) return 3;
-    if (rssi >= -75) return 2;
+  int _signalBarsFromPing(int? pingMs) {
+    if (pingMs == null) return 0;
+    if (pingMs < 100) return 4;
+    if (pingMs < 200) return 3;
+    if (pingMs < 350) return 2;
     return 1;
   }
 
@@ -338,7 +340,7 @@ class PSR3Controller extends ChangeNotifier {
       espFreeHeap = (data['free_heap'] as num?)?.toInt();
       espLargestBlock = (data['largest_block'] as num?)?.toInt();
       espWifiRssi = (data['wifi_rssi'] as num?)?.toInt();
-      signalBars = _signalBarsFromRssi(espWifiRssi);
+      signalBars = _signalBarsFromPing(espPingMs);
 
       final remoteGames = data['installed_games'];
       if (remoteGames is List) {
@@ -506,13 +508,22 @@ class PSR3Controller extends ChangeNotifier {
       await Future.wait([
         audio.stop(),
         audioBoost.stop(),
+        audioBoost2.stop(),
+        audioBoost3.stop(),
       ]);
-      await audio.setVolume(1.0);
-      await audioBoost.setVolume(1.0);
-      final source = AssetSource('audio/' + file);
+
       await Future.wait([
-        audio.play(source),
+        audio.setVolume(1.0),
+        audioBoost.setVolume(1.0),
+        audioBoost2.setVolume(1.0),
+        audioBoost3.setVolume(1.0),
+      ]);
+
+      await Future.wait([
+        audio.play(AssetSource('audio/' + file)),
         audioBoost.play(AssetSource('audio/' + file)),
+        audioBoost2.play(AssetSource('audio/' + file)),
+        audioBoost3.play(AssetSource('audio/' + file)),
       ]);
     } catch (_) {}
   }
@@ -641,12 +652,44 @@ class PSR3Controller extends ChangeNotifier {
       return;
     }
 
+    await pollEspStatus(quiet: true);
+    if (!espConnected || !isInstalled(game.id)) {
+      await playSound('error.mp3');
+      return;
+    }
+
+    // Confirm removal with ESP32 BEFORE the animation.
+    Map<String, dynamic> reply;
+    try {
+      reply = await _espRequest(
+        'POST',
+        '/api/game/remove',
+        body: <String, dynamic>{'gameId': game.id},
+      );
+    } catch (e) {
+      espLastError = e.toString();
+      await playSound('error.mp3');
+      notifyListeners();
+      return;
+    }
+
+    final accepted = reply['ok'] == true && reply['installed'] != true;
+    if (!accepted) {
+      espLastError = 'ESP32 rejected removal';
+      await playSound('error.mp3');
+      notifyListeners();
+      return;
+    }
+
+    final remoteUsed = (reply['storage_used_mb'] as num?)?.toInt();
+    if (remoteUsed != null) espStorageUsedMb = remoteUsed;
+
     removalProgress[game.id] = 0;
     notifyListeners();
 
     final completer = Completer<void>();
     final stopwatch = Stopwatch()..start();
-    const total = 3500;
+    const total = 1800;
 
     removalTimers[game.id] = Timer.periodic(
       const Duration(milliseconds: 16),
@@ -658,39 +701,20 @@ class PSR3Controller extends ChangeNotifier {
           stopwatch.stop();
           timer.cancel();
           removalTimers.remove(game.id);
+          removalProgress.remove(game.id);
+          installed.remove(game.id);
 
-          try {
-            final data = await _espRequest(
-              'POST',
-              '/api/game/remove',
-              body: <String, dynamic>{'gameId': game.id},
-            );
-
-            if (data['ok'] != true || data['installed'] == true) {
-              throw const FormatException('ESP32 rejected removal');
-            }
-
-            installed.remove(game.id);
-            espStorageUsedMb =
-                (data['storage_used_mb'] as num?)?.toInt() ?? installedSizeMb;
-
-            if (lastInstalledGameId == game.id) {
-              lastInstalledGameId = null;
-            }
-
-            await saveInstalled();
-            unawaited(pollEspStatus(quiet: true));
-          } catch (e) {
-            espLastError = e.toString();
-            await playSound('error.mp3');
-          } finally {
-            removalProgress.remove(game.id);
-            notifyListeners();
-            if (!completer.isCompleted) completer.complete();
+          if (lastInstalledGameId == game.id) {
+            lastInstalledGameId = null;
           }
-        } else {
-          notifyListeners();
+
+          await saveInstalled();
+          unawaited(pollEspStatus(quiet: true));
+
+          if (!completer.isCompleted) completer.complete();
         }
+
+        notifyListeners();
       },
     );
 
