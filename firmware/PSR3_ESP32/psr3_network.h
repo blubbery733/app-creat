@@ -416,20 +416,6 @@ void handleHttpClient(WiFiClient client) {
   if (method == "GET" && path == "/api/status") {
     sendJson(client, 200, "OK", statusJson());
   }
-  else if (method == "GET" && path == "/api/games") {
-    sendJson(
-      client,
-      200,
-      "OK",
-      String("{\"ok\":true,\"installed_games\":") +
-      installedGamesJsonArray() +
-      ",\"storage_used_mb\":" +
-      installedStorageMb() +
-      ",\"storage_total_mb\":" +
-      STORAGE_TOTAL_MB +
-      "}"
-    );
-  }
   else if (method == "POST" && path == "/api/game/install") {
     const int gameId = extractJsonInt(body, "gameId");
 
@@ -525,31 +511,6 @@ void handleHttpClient(WiFiClient client) {
     sendJson(client, 200, "OK", "{\"ok\":true,\"restarting\":true}");
     client.flush();
     scheduleRestart();
-  }
-  else if (method == "POST" &&
-           (path == "/game" || path == "/api/game")) {
-    int gameId = extractJsonInt(body, "gameId");
-
-    if (gameId <= 0 && queryPos >= 0) {
-      const int idPos = target.indexOf("id=");
-      if (idPos >= 0) {
-        gameId = target.substring(idPos + 3).toInt();
-      }
-    }
-
-    if (gameId > 0) addInstalledGame(gameId);
-
-    sendJson(
-      client,
-      200,
-      "OK",
-      String("{\"ok\":true,\"accepted\":true,\"installed_games\":") +
-      installedGamesJsonArray() +
-      "}"
-    );
-  }
-  else if (method == "GET" && path == "/") {
-    sendJson(client, 200, "OK", "{\"ok\":true,\"device\":\"PSR3\"}");
   }
   else {
     sendError(client, 404, "Not Found", "not_found");
