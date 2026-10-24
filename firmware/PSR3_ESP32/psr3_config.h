@@ -11,7 +11,7 @@
 #define ESP_ARDUINO_VERSION_MAJOR 2
 #endif
 
-constexpr char FW_VERSION[] = "0.5.1-dev";
+constexpr char FW_VERSION[] = "0.5.2-dev";
 constexpr char AP_SSID[] = "PSR3";
 constexpr char AP_PASSWORD[] = "psr3update";
 
@@ -41,8 +41,8 @@ constexpr uint32_t UPDATE_TIMEOUT_MS = 30000;
 
 constexpr uint32_t FAN_PWM_FREQ = 25000;
 constexpr uint8_t FAN_PWM_BITS = 8;
-constexpr uint8_t FAN_BOOT_PERCENT = 55;
-constexpr uint8_t FAN_IDLE_PERCENT = 40;
+constexpr uint8_t FAN_BOOT_PERCENT = 85;
+constexpr uint8_t FAN_IDLE_PERCENT = 70;
 constexpr uint8_t FAN_PWM_CHANNEL = 0;
 constexpr uint8_t BUZZER_CHANNEL = 1;
 
