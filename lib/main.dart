@@ -25,7 +25,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.5 Beta';
+const appVersionLabel = '0.4.6 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 const espBaseUrl = 'http://192.168.4.1';
@@ -160,7 +160,7 @@ class PSR3Controller extends ChangeNotifier {
   bool signedIn = false;
   String? error;
   String? avatarPath;
-  int signalBars = 3;
+  int signalBars = 0;
   int? lastInstalledGameId;
 
   final installed = <int>{};
@@ -176,6 +176,7 @@ class PSR3Controller extends ChangeNotifier {
 
   Timer? espPollTimer;
   bool espConnected = false;
+  bool espPollBusy = false;
   bool espCommandBusy = false;
   String espFirmware = '—';
   String espIp = '192.168.4.1';
@@ -184,6 +185,8 @@ class PSR3Controller extends ChangeNotifier {
   int? espFreeHeap;
   int? espLargestBlock;
   int? espWifiRssi;
+  int espStorageUsedMb = 0;
+  int espStorageTotalMb = 2048;
 
   PSR3Controller() {
     unawaited(loadSavedState());
@@ -194,10 +197,10 @@ class PSR3Controller extends ChangeNotifier {
   bool isRemoving(int id) => removalProgress.containsKey(id);
 
   Color get signalColor {
-    if (signalBars <= 1) return const Color(0xFFE64C4C);
-    if (signalBars == 2) return const Color(0xFFD59A2D);
-    if (signalBars == 3) return C.accent;
-    return C.blue;
+    if (signalBars <= 0) return C.muted;
+    if (signalBars == 1) return const Color(0xFFE64C4C);
+    if (signalBars <= 3) return const Color(0xFFD59A2D);
+    return C.accent;
   }
 
   int get installedFreeCount =>
@@ -210,6 +213,12 @@ class PSR3Controller extends ChangeNotifier {
   int get installedSizeMb => games
       .where((g) => installed.contains(g.id))
       .fold(0, (sum, g) => sum + g.sizeMb);
+
+  int get storageUsedMb =>
+      espStorageUsedMb > 0 || installed.isEmpty ? espStorageUsedMb : installedSizeMb;
+
+  int get storageTotalMb =>
+      espStorageTotalMb > 0 ? espStorageTotalMb : 2048;
 
   Future<void> loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
@@ -309,6 +318,9 @@ class PSR3Controller extends ChangeNotifier {
   }
 
   Future<bool> pollEspStatus({bool quiet = false}) async {
+    if (espPollBusy) return espConnected;
+    espPollBusy = true;
+
     try {
       final data = await _espRequest('GET', '/api/status');
 
@@ -323,6 +335,30 @@ class PSR3Controller extends ChangeNotifier {
       espLargestBlock = (data['largest_block'] as num?)?.toInt();
       espWifiRssi = (data['wifi_rssi'] as num?)?.toInt();
       signalBars = _signalBarsFromRssi(espWifiRssi);
+
+      final remoteGames = data['installed_games'];
+      if (remoteGames is List) {
+        final remoteIds = remoteGames
+            .whereType<num>()
+            .map((value) => value.toInt())
+            .toSet();
+
+        final changed = installed.length != remoteIds.length ||
+            installed.any((id) => !remoteIds.contains(id));
+
+        if (changed) {
+          installed
+            ..clear()
+            ..addAll(remoteIds);
+          unawaited(saveInstalled());
+        }
+      }
+
+      espStorageUsedMb =
+          (data['storage_used_mb'] as num?)?.toInt() ?? installedSizeMb;
+      espStorageTotalMb =
+          (data['storage_total_mb'] as num?)?.toInt() ?? 2048;
+
       espLastError = null;
       error = null;
       notifyListeners();
@@ -339,6 +375,8 @@ class PSR3Controller extends ChangeNotifier {
 
       notifyListeners();
       return false;
+    } finally {
+      espPollBusy = false;
     }
   }
 
@@ -483,6 +521,19 @@ class PSR3Controller extends ChangeNotifier {
       return false;
     }
 
+    if (!espConnected) {
+      await playSound('error.mp3');
+      error = 'Нет связи с PSR3.';
+      notifyListeners();
+      return false;
+    }
+
+    await pollEspStatus(quiet: true);
+    if (isInstalled(game.id)) {
+      await playSound('error.mp3');
+      return false;
+    }
+
     await playSound('install.mp3');
     progress[game.id] = 0;
     notifyListeners();
@@ -500,14 +551,39 @@ class PSR3Controller extends ChangeNotifier {
         if (value >= 1) {
           timer.cancel();
           timers.remove(game.id);
-          progress.remove(game.id);
-          installed.add(game.id);
-          lastInstalledGameId = game.id;
-          await saveInstalled();
-          await playSound('notification.mp3');
-        }
 
-        notifyListeners();
+          try {
+            final data = await _espRequest(
+              'POST',
+              '/api/game/install',
+              body: <String, dynamic>{
+                'gameId': game.id,
+                'gameName': game.name,
+                'sizeMb': game.sizeMb,
+              },
+            );
+
+            if (data['ok'] != true || data['installed'] != true) {
+              throw const FormatException('ESP32 rejected install');
+            }
+
+            installed.add(game.id);
+            espStorageUsedMb =
+                (data['storage_used_mb'] as num?)?.toInt() ?? installedSizeMb;
+            lastInstalledGameId = game.id;
+            await saveInstalled();
+            await playSound('notification.mp3');
+            unawaited(pollEspStatus(quiet: true));
+          } catch (e) {
+            espLastError = e.toString();
+            await playSound('error.mp3');
+          } finally {
+            progress.remove(game.id);
+            notifyListeners();
+          }
+        } else {
+          notifyListeners();
+        }
       },
     );
 
@@ -519,6 +595,13 @@ class PSR3Controller extends ChangeNotifier {
         isInstalling(game.id) ||
         isRemoving(game.id)) {
       await playSound('error.mp3');
+      return;
+    }
+
+    if (!espConnected) {
+      await playSound('error.mp3');
+      error = 'Нет связи с PSR3.';
+      notifyListeners();
       return;
     }
 
@@ -539,18 +622,39 @@ class PSR3Controller extends ChangeNotifier {
           stopwatch.stop();
           timer.cancel();
           removalTimers.remove(game.id);
-          removalProgress.remove(game.id);
-          installed.remove(game.id);
 
-          if (lastInstalledGameId == game.id) {
-            lastInstalledGameId = null;
+          try {
+            final data = await _espRequest(
+              'POST',
+              '/api/game/remove',
+              body: <String, dynamic>{'gameId': game.id},
+            );
+
+            if (data['ok'] != true || data['installed'] == true) {
+              throw const FormatException('ESP32 rejected removal');
+            }
+
+            installed.remove(game.id);
+            espStorageUsedMb =
+                (data['storage_used_mb'] as num?)?.toInt() ?? installedSizeMb;
+
+            if (lastInstalledGameId == game.id) {
+              lastInstalledGameId = null;
+            }
+
+            await saveInstalled();
+            unawaited(pollEspStatus(quiet: true));
+          } catch (e) {
+            espLastError = e.toString();
+            await playSound('error.mp3');
+          } finally {
+            removalProgress.remove(game.id);
+            notifyListeners();
+            if (!completer.isCompleted) completer.complete();
           }
-
-          await saveInstalled();
-          completer.complete();
+        } else {
+          notifyListeners();
         }
-
-        notifyListeners();
       },
     );
 
@@ -1361,8 +1465,8 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final used = controller.installedSizeMb;
-    const total = 2048;
+    final used = controller.storageUsedMb;
+    final total = controller.storageTotalMb;
     return Frame(
       ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 26),
@@ -2239,12 +2343,12 @@ Future<void> showSettings(
     backgroundColor: C.card,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (sheetContext) => FractionallySizedBox(
-      heightFactor: .62,
-      child: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Row(
               children: [
