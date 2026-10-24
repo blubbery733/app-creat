@@ -35,6 +35,7 @@ constexpr uint8_t PIN_FAN_PWM     = 33;
 // ---------- Hardware configuration ----------
 // The project wiring has been treated as active-HIGH for PSU_ON.
 // Change only this flag if the low-voltage driver is later found to invert it.
+constexpr bool PSU_CONTROL_ENABLED = false;
 constexpr bool PSU_ON_ACTIVE_HIGH = true;
 
 // Keep this configurable because PS3 fan control may be inverted depending
@@ -91,6 +92,10 @@ void setLeds(bool red, bool green, bool yellow) {
 }
 
 void setPsu(bool enabled) {
+  if (!PSU_CONTROL_ENABLED) {
+    return;
+  }
+
   const bool level = enabled ? PSU_ON_ACTIVE_HIGH : !PSU_ON_ACTIVE_HIGH;
   digitalWrite(PIN_PSU_ON, level ? HIGH : LOW);
 }
@@ -218,7 +223,14 @@ void setup() {
   pinMode(PIN_LED_GREEN, OUTPUT);
   pinMode(PIN_LED_YELLOW, OUTPUT);
   pinMode(PIN_TOUCH_POWER, INPUT);
-  pinMode(PIN_PSU_ON, OUTPUT);
+
+  // Safe first-build behavior: do not drive APS-231 PSU_ON until its
+  // low-voltage control polarity/interface is confirmed.
+  if (PSU_CONTROL_ENABLED) {
+    pinMode(PIN_PSU_ON, OUTPUT);
+  } else {
+    pinMode(PIN_PSU_ON, INPUT);
+  }
 
   // Arduino-ESP32 3.x LEDC API: channel assignment is automatic per pin.
   const bool fanPwmOk = ledcAttach(PIN_FAN_PWM, FAN_PWM_FREQ, FAN_PWM_BITS);
@@ -232,6 +244,8 @@ void setup() {
   Serial.print("[PSR3] Firmware ");
   Serial.println(FW_VERSION);
   Serial.println("[PSR3] Hardware foundation loaded");
+  Serial.print("[INIT] PSU control: ");
+  Serial.println(PSU_CONTROL_ENABLED ? "ENABLED" : "SAFE TEST / DISABLED");
   Serial.print("[INIT] Fan PWM: ");
   Serial.println(fanPwmOk ? "OK" : "ERROR");
   Serial.print("[INIT] Buzzer PWM: ");
