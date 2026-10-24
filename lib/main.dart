@@ -25,7 +25,7 @@ class C {
   static const border = Color(0xFF2A2F37);
 }
 
-const appVersionLabel = '0.4.8 Beta';
+const appVersionLabel = '0.4.9 Beta';
 const fullReleaseDate = 'до 15 ноября 2026';
 const profileNick = '@Maksimka77nolka2';
 const espBaseUrl = 'http://192.168.4.1';
@@ -528,6 +528,48 @@ class PSR3Controller extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Future<bool> _verifyGameState(
+    int gameId, {
+    required bool installedExpected,
+  }) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final data = await _espRequest('GET', '/api/status');
+        if (data['ok'] != true) throw const FormatException('status ok=false');
+
+        final remoteGames = data['installed_games'];
+        if (remoteGames is List) {
+          final remoteIds = remoteGames
+              .whereType<num>()
+              .map((value) => value.toInt())
+              .toSet();
+
+          installed
+            ..clear()
+            ..addAll(remoteIds);
+
+          espStorageUsedMb =
+              (data['storage_used_mb'] as num?)?.toInt() ?? installedSizeMb;
+          espStorageTotalMb =
+              (data['storage_total_mb'] as num?)?.toInt() ?? 2048;
+
+          await saveInstalled();
+          notifyListeners();
+
+          if (remoteIds.contains(gameId) == installedExpected) {
+            return true;
+          }
+        }
+      } catch (e) {
+        espLastError = e.toString();
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+    }
+
+    return false;
+  }
+
   Future<bool> install(Game game) async {
     if (game.isPaid ||
         isInstalled(game.id) ||
@@ -544,21 +586,8 @@ class PSR3Controller extends ChangeNotifier {
       return false;
     }
 
-    await pollEspStatus(quiet: true);
-    if (!espConnected) {
-      await playSound('error.mp3');
-      return false;
-    }
-    if (isInstalled(game.id)) {
-      await playSound('error.mp3');
-      return false;
-    }
-
-    // Confirm the install with ESP32 BEFORE showing the long progress animation.
-    // This prevents the old "100% -> error" behavior.
-    Map<String, dynamic>? installReply;
     try {
-      installReply = await _espRequest(
+      await _espRequest(
         'POST',
         '/api/game/install',
         body: <String, dynamic>{
@@ -567,46 +596,24 @@ class PSR3Controller extends ChangeNotifier {
           'sizeMb': game.sizeMb,
         },
       );
-    } catch (_) {
-      // Compatibility with older PSR3 firmware.
-      try {
-        installReply = await _espRequest(
-          'POST',
-          '/game?id=' +
-              game.id.toString() +
-              '&name=' +
-              Uri.encodeComponent(game.name),
-          body: <String, dynamic>{
-            'gameId': game.id,
-            'gameName': game.name,
-          },
-        );
-      } catch (e) {
-        espLastError = e.toString();
-        await playSound('error.mp3');
-        notifyListeners();
-        return false;
-      }
+    } catch (e) {
+      // The command may still have reached the ESP32, so verify the real state.
+      espLastError = e.toString();
     }
 
-    final reply = installReply ?? const <String, dynamic>{};
-    final accepted = reply['ok'] == true &&
-        (reply['installed'] == true ||
-            reply['accepted'] == true ||
-            reply['gameId'] == game.id);
+    final verified = await _verifyGameState(
+      game.id,
+      installedExpected: true,
+    );
 
-    if (!accepted) {
-      espLastError = 'ESP32 rejected install';
+    if (!verified) {
       await playSound('error.mp3');
+      error = 'ESP32 не подтвердила установку игры.';
       notifyListeners();
       return false;
     }
 
-    installed.add(game.id);
-    final remoteUsed = (reply['storage_used_mb'] as num?)?.toInt();
-    if (remoteUsed != null) espStorageUsedMb = remoteUsed;
-    await saveInstalled();
-
+    error = null;
     await playSound('install.mp3');
     progress[game.id] = 0;
     notifyListeners();
@@ -615,11 +622,11 @@ class PSR3Controller extends ChangeNotifier {
     final total = game.seconds * 1000;
 
     timers[game.id] = Timer.periodic(
-      const Duration(milliseconds: 250),
+      const Duration(milliseconds: 100),
       (timer) async {
-        elapsed += 250;
+        elapsed += 100;
         final value = (elapsed / total).clamp(0.0, 1.0);
-        progress[game.id] = value;
+        progress[game.id] = Curves.easeInOutCubic.transform(value);
 
         if (value >= 1) {
           timer.cancel();
@@ -652,44 +659,36 @@ class PSR3Controller extends ChangeNotifier {
       return;
     }
 
-    await pollEspStatus(quiet: true);
-    if (!espConnected || !isInstalled(game.id)) {
-      await playSound('error.mp3');
-      return;
-    }
-
-    // Confirm removal with ESP32 BEFORE the animation.
-    Map<String, dynamic> reply;
     try {
-      reply = await _espRequest(
+      await _espRequest(
         'POST',
         '/api/game/remove',
         body: <String, dynamic>{'gameId': game.id},
       );
     } catch (e) {
+      // Verify ESP state even if the HTTP response was interrupted.
       espLastError = e.toString();
+    }
+
+    final verified = await _verifyGameState(
+      game.id,
+      installedExpected: false,
+    );
+
+    if (!verified) {
       await playSound('error.mp3');
+      error = 'ESP32 не подтвердила удаление игры.';
       notifyListeners();
       return;
     }
 
-    final accepted = reply['ok'] == true && reply['installed'] != true;
-    if (!accepted) {
-      espLastError = 'ESP32 rejected removal';
-      await playSound('error.mp3');
-      notifyListeners();
-      return;
-    }
-
-    final remoteUsed = (reply['storage_used_mb'] as num?)?.toInt();
-    if (remoteUsed != null) espStorageUsedMb = remoteUsed;
-
+    error = null;
     removalProgress[game.id] = 0;
     notifyListeners();
 
     final completer = Completer<void>();
     final stopwatch = Stopwatch()..start();
-    const total = 1800;
+    const total = 1400;
 
     removalTimers[game.id] = Timer.periodic(
       const Duration(milliseconds: 16),
@@ -702,14 +701,10 @@ class PSR3Controller extends ChangeNotifier {
           timer.cancel();
           removalTimers.remove(game.id);
           removalProgress.remove(game.id);
-          installed.remove(game.id);
 
           if (lastInstalledGameId == game.id) {
             lastInstalledGameId = null;
           }
-
-          await saveInstalled();
-          unawaited(pollEspStatus(quiet: true));
 
           if (!completer.isCompleted) completer.complete();
         }
@@ -777,6 +772,8 @@ class PSR3Controller extends ChangeNotifier {
     http.close(force: true);
     unawaited(audio.dispose());
     unawaited(audioBoost.dispose());
+    unawaited(audioBoost2.dispose());
+    unawaited(audioBoost3.dispose());
     super.dispose();
   }
 }
@@ -2364,21 +2361,39 @@ class Signal extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: List.generate(4, (i) {
           final active = i < controller.signalBars;
-          return Container(
-            width: 5,
-            height: 7.0 + i * 5,
-            margin: const EdgeInsets.only(left: 3),
-            decoration: BoxDecoration(
-              color: active ? controller.signalColor : C.card2,
-              borderRadius: BorderRadius.circular(2),
-            ),
+          final baseHeight = 7.0 + i * 5;
+
+          return TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: active ? 1.0 : 0.0),
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              final color = Color.lerp(
+                C.card2,
+                controller.signalColor,
+                value,
+              )!;
+
+              return Transform.scale(
+                alignment: Alignment.bottomCenter,
+                scaleY: 0.76 + (0.24 * value),
+                child: Container(
+                  width: 5,
+                  height: baseHeight,
+                  margin: const EdgeInsets.only(left: 3),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              );
+            },
           );
         }),
       ),
     );
   }
 }
-
 
 
 void openGame(
